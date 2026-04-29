@@ -1,0 +1,7 @@
+.env
+api-server.exe
+bin/
+tmp/
+*.log
+*.test.exe
+coverage.out

@@ -1,0 +1,1582 @@
+openapi: 3.1.0
+info:
+  title: Kingsway Backend API
+  version: 0.2.0
+  description: Kingsway Operation Center backend HTTP contract.
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: health
+  - name: auth
+  - name: academic
+  - name: finance
+  - name: files
+  - name: notifications
+  - name: dashboards
+  - name: admin
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      security: []
+      responses:
+        "200":
+          description: API liveness.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      tags: [health]
+      security: []
+      responses:
+        "200":
+          description: API readiness.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+  /metrics:
+    get:
+      tags: [health]
+      security: []
+      responses:
+        "200":
+          description: In-process request metrics snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metrics"
+  /v1/auth/bootstrap-owner:
+    post:
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootstrapOwnerInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/LoginResult"
+        "409":
+          $ref: "#/components/responses/Error"
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/LoginResult"
+        "401":
+          $ref: "#/components/responses/Error"
+  /v1/me:
+    get:
+      tags: [auth]
+      responses:
+        "200":
+          $ref: "#/components/responses/User"
+        "401":
+          $ref: "#/components/responses/Error"
+  /v1/session:
+    get:
+      tags: [auth]
+      responses:
+        "200":
+          description: Current user, principal, capabilities, and dashboard route.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /v1/branches:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/BranchList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateBranch"
+      responses:
+        "201":
+          $ref: "#/components/responses/Branch"
+  /v1/students:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: status
+          in: query
+          schema:
+            enum: [active, left]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/StudentList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateStudent"
+      responses:
+        "201":
+          $ref: "#/components/responses/Student"
+  /v1/students/by-fin/{fin}:
+    get:
+      tags: [academic]
+      parameters:
+        - name: fin
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 7
+            maxLength: 7
+      responses:
+        "200":
+          $ref: "#/components/responses/Student"
+  /v1/students/{student_id}:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/StudentID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Student"
+  /v1/students/{student_id}/account:
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/StudentID"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateStudentAccount"
+      responses:
+        "201":
+          description: Linked student and created login user.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student:
+                    $ref: "#/components/schemas/Student"
+                  user:
+                    $ref: "#/components/schemas/User"
+  /v1/teachers:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: status
+          in: query
+          schema:
+            enum: [pending_owner_approval, active, terminated]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/TeacherList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/RegisterTeacher"
+      responses:
+        "201":
+          description: Teacher and user.
+  /v1/teachers/{teacher_id}:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/TeacherID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Teacher"
+  /v1/teachers/{teacher_id}/activate:
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/TeacherID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Teacher"
+  /v1/courses:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/CourseList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateCourse"
+      responses:
+        "201":
+          description: Course and score categories.
+  /v1/courses/{course_id}:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/CourseID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Course"
+  /v1/classes:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/ClassList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateClass"
+      responses:
+        "201":
+          $ref: "#/components/responses/Class"
+  /v1/classes/{class_id}:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ClassID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Class"
+  /v1/classes/{class_id}/students:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ClassID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Class enrollments.
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ClassID"
+      requestBody:
+        $ref: "#/components/requestBodies/EnrollStudent"
+      responses:
+        "201":
+          description: Created enrollment.
+  /v1/classes/{class_id}/assignments:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ClassID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/AssignmentList"
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ClassID"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAssignment"
+      responses:
+        "201":
+          $ref: "#/components/responses/Assignment"
+  /v1/assignments:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: class_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/AssignmentList"
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateAssignment"
+      responses:
+        "201":
+          $ref: "#/components/responses/Assignment"
+  /v1/rooms:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Rooms.
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateRoom"
+      responses:
+        "201":
+          description: Created room.
+  /v1/schedules:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: item_type
+          in: query
+          schema:
+            enum: [lesson, exam, event]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Schedule items.
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateScheduleItem"
+      responses:
+        "201":
+          description: Created schedule item.
+        "409":
+          $ref: "#/components/responses/Error"
+  /v1/exams:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: class_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Exams.
+    post:
+      tags: [academic]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateExam"
+      responses:
+        "201":
+          description: Exam and participants.
+  /v1/exams/{exam_id}:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ExamID"
+      responses:
+        "200":
+          description: Exam.
+  /v1/exams/{exam_id}/results:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ExamID"
+        - $ref: "#/components/parameters/BranchID"
+        - name: student_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Exam results.
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/ExamID"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateExamResult"
+      responses:
+        "201":
+          description: Created exam result.
+  /v1/exam-results:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: exam_id
+          in: query
+          schema:
+            type: string
+        - name: student_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Exam results.
+  /v1/dashboard/academic:
+    get:
+      tags: [dashboards]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+      responses:
+        "200":
+          description: Academic dashboard counts.
+  /v1/dashboard/owner:
+    get:
+      tags: [dashboards]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+      responses:
+        "200":
+          description: Owner dashboard.
+  /v1/dashboard/receptionist:
+    get:
+      tags: [dashboards]
+      responses:
+        "200":
+          description: Receptionist dashboard.
+  /v1/dashboard/teacher:
+    get:
+      tags: [dashboards]
+      responses:
+        "200":
+          description: Teacher dashboard.
+  /v1/dashboard/student:
+    get:
+      tags: [dashboards]
+      responses:
+        "200":
+          description: Student dashboard.
+  /v1/payments:
+    get:
+      tags: [finance]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: status
+          in: query
+          schema:
+            enum: [pending, paid, overdue, cancelled]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/PaymentList"
+    post:
+      tags: [finance]
+      requestBody:
+        $ref: "#/components/requestBodies/CreatePayment"
+      responses:
+        "201":
+          $ref: "#/components/responses/Payment"
+  /v1/payments/{payment_id}:
+    get:
+      tags: [finance]
+      parameters:
+        - $ref: "#/components/parameters/PaymentID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Payment"
+  /v1/salary-models:
+    get:
+      tags: [finance]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Salary models.
+    post:
+      tags: [finance]
+      requestBody:
+        $ref: "#/components/requestBodies/CreateSalaryModel"
+      responses:
+        "201":
+          description: Created salary model.
+  /v1/salary/swap-allocation:
+    post:
+      tags: [finance]
+      requestBody:
+        $ref: "#/components/requestBodies/SwapAllocation"
+      responses:
+        "200":
+          description: Swap allocation result.
+  /v1/files:
+    get:
+      tags: [files]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: owner_type
+          in: query
+          schema:
+            type: string
+        - name: owner_id
+          in: query
+          schema:
+            type: string
+        - name: purpose
+          in: query
+          schema:
+            enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/FileList"
+    post:
+      tags: [files]
+      requestBody:
+        $ref: "#/components/requestBodies/RegisterFile"
+      responses:
+        "201":
+          $ref: "#/components/responses/File"
+  /v1/files/upload:
+    post:
+      tags: [files]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [branch_id, owner_type, owner_id, category, purpose, file]
+              properties:
+                branch_id:
+                  type: string
+                owner_type:
+                  type: string
+                owner_id:
+                  type: string
+                category:
+                  enum: [standard, special]
+                purpose:
+                  enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          $ref: "#/components/responses/File"
+  /v1/files/{file_id}:
+    get:
+      tags: [files]
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          $ref: "#/components/responses/File"
+  /v1/files/{file_id}/download-url:
+    get:
+      tags: [files]
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          description: Short-lived MinIO presigned download URL.
+  /v1/files/retention/cleanup:
+    post:
+      tags: [files]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Owner-triggered retention cleanup.
+  /v1/notifications:
+    get:
+      tags: [notifications]
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/NotificationList"
+  /v1/notifications/{notification_id}/read:
+    post:
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Notification"
+  /v1/admin/outbox:
+    get:
+      tags: [admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            enum: [pending, publishing, published, failed]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Owner-only outbox event page.
+          headers:
+            X-Total-Count:
+              $ref: "#/components/headers/XTotalCount"
+            X-Limit:
+              $ref: "#/components/headers/XLimit"
+            X-Offset:
+              $ref: "#/components/headers/XOffset"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutboxEvent"
+  /v1/admin/outbox/{event_id}/retry:
+    post:
+      tags: [admin]
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Failed event reset to pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboxEvent"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    BranchID:
+      name: branch_id
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    StudentID:
+      name: student_id
+      in: path
+      required: true
+      schema:
+        type: string
+    TeacherID:
+      name: teacher_id
+      in: path
+      required: true
+      schema:
+        type: string
+    CourseID:
+      name: course_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ClassID:
+      name: class_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ExamID:
+      name: exam_id
+      in: path
+      required: true
+      schema:
+        type: string
+    PaymentID:
+      name: payment_id
+      in: path
+      required: true
+      schema:
+        type: string
+    FileID:
+      name: file_id
+      in: path
+      required: true
+      schema:
+        type: string
+    NotificationID:
+      name: notification_id
+      in: path
+      required: true
+      schema:
+        type: string
+  headers:
+    XTotalCount:
+      schema:
+        type: integer
+    XLimit:
+      schema:
+        type: integer
+    XOffset:
+      schema:
+        type: integer
+  requestBodies:
+    CreateBranch:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, slug]
+            properties:
+              name:
+                type: string
+              slug:
+                type: string
+              address:
+                type: string
+    CreateStudent:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, fin, first_name, last_name]
+            properties:
+              branch_id:
+                type: string
+              fin:
+                type: string
+              first_name:
+                type: string
+              last_name:
+                type: string
+    CreateStudentAccount:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+                minLength: 8
+    RegisterTeacher:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, email, password, first_name, last_name]
+            properties:
+              branch_id:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+              first_name:
+                type: string
+              last_name:
+                type: string
+    CreateCourse:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, name]
+            properties:
+              branch_id:
+                type: string
+              name:
+                type: string
+              score_categories:
+                type: array
+                items:
+                  type: object
+    CreateClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, course_id, teacher_id, name, start_date]
+            properties:
+              branch_id:
+                type: string
+              course_id:
+                type: string
+              teacher_id:
+                type: string
+              name:
+                type: string
+              start_date:
+                type: string
+                format: date-time
+              end_date:
+                type: string
+                format: date-time
+    EnrollStudent:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [student_id, joined_at]
+            properties:
+              student_id:
+                type: string
+              joined_at:
+                type: string
+                format: date-time
+    CreateAssignment:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, class_id, title]
+            properties:
+              branch_id:
+                type: string
+              class_id:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
+              due_at:
+                type: string
+                format: date-time
+              material_file_id:
+                type: string
+    CreateRoom:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, name, capacity]
+            properties:
+              branch_id:
+                type: string
+              name:
+                type: string
+              capacity:
+                type: integer
+    CreateScheduleItem:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, teacher_id, room_id, item_type, title, starts_at, ends_at]
+            properties:
+              branch_id:
+                type: string
+              class_id:
+                type: string
+              teacher_id:
+                type: string
+              room_id:
+                type: string
+              item_type:
+                enum: [lesson, exam, event]
+              title:
+                type: string
+              starts_at:
+                type: string
+                format: date-time
+              ends_at:
+                type: string
+                format: date-time
+    CreateExam:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, course_id, title]
+            properties:
+              branch_id:
+                type: string
+              course_id:
+                type: string
+              class_id:
+                type: string
+              schedule_item_id:
+                type: string
+              title:
+                type: string
+              student_ids:
+                type: array
+                items:
+                  type: string
+    CreateExamResult:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, student_id, category_id, score]
+            properties:
+              branch_id:
+                type: string
+              student_id:
+                type: string
+              category_id:
+                type: string
+              score:
+                type: number
+              feedback:
+                type: string
+              document_file_id:
+                type: string
+    CreatePayment:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, student_id, amount_cents, due_date]
+            properties:
+              branch_id:
+                type: string
+              student_id:
+                type: string
+              amount_cents:
+                type: integer
+              currency:
+                type: string
+                default: AZN
+              due_date:
+                type: string
+                format: date-time
+              status:
+                enum: [pending, paid, overdue, cancelled]
+              receipt_file_id:
+                type: string
+    CreateSalaryModel:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, teacher_id, model_type, active_from]
+            properties:
+              branch_id:
+                type: string
+              teacher_id:
+                type: string
+              model_type:
+                enum: [fixed, percent, hybrid]
+              fixed_monthly_amount_cents:
+                type: integer
+              student_percent_basis_points:
+                type: integer
+              active_from:
+                type: string
+                format: date-time
+              active_to:
+                type: string
+                format: date-time
+    SwapAllocation:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [total_amount_cents, first_teacher_days, second_teacher_days]
+            properties:
+              total_amount_cents:
+                type: integer
+              first_teacher_days:
+                type: integer
+              second_teacher_days:
+                type: integer
+    RegisterFile:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [branch_id, owner_type, owner_id, category, purpose, original_filename, mime_type, original_size_bytes, stored_size_bytes, original_sha256, storage_bucket, storage_key]
+            properties:
+              branch_id:
+                type: string
+              owner_type:
+                type: string
+              owner_id:
+                type: string
+              category:
+                enum: [standard, special]
+              purpose:
+                enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
+              original_filename:
+                type: string
+              mime_type:
+                type: string
+              original_size_bytes:
+                type: integer
+              stored_size_bytes:
+                type: integer
+              original_sha256:
+                type: string
+              storage_bucket:
+                type: string
+              storage_key:
+                type: string
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    LoginResult:
+      description: JWT token and user.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              token:
+                type: string
+              user:
+                $ref: "#/components/schemas/User"
+    User:
+      description: User.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/User"
+    Branch:
+      description: Branch.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Branch"
+    BranchList:
+      description: Branch list.
+      headers:
+        X-Total-Count:
+          $ref: "#/components/headers/XTotalCount"
+        X-Limit:
+          $ref: "#/components/headers/XLimit"
+        X-Offset:
+          $ref: "#/components/headers/XOffset"
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Branch"
+    Student:
+      description: Student.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Student"
+    StudentList:
+      description: Student list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Student"
+    Teacher:
+      description: Teacher.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Teacher"
+    TeacherList:
+      description: Teacher list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Teacher"
+    Course:
+      description: Course.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Course"
+    CourseList:
+      description: Course list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Course"
+    Class:
+      description: Class.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Class"
+    ClassList:
+      description: Class list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Class"
+    Assignment:
+      description: Assignment.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Assignment"
+    AssignmentList:
+      description: Assignment list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Assignment"
+    Payment:
+      description: Payment.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Payment"
+    PaymentList:
+      description: Payment list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Payment"
+    File:
+      description: File metadata.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/FileObject"
+    FileList:
+      description: File list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/FileObject"
+    Notification:
+      description: Notification.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Notification"
+    NotificationList:
+      description: Notification list.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Notification"
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    Readiness:
+      type: object
+      properties:
+        status:
+          type: string
+        components:
+          type: object
+          additionalProperties:
+            type: string
+    Metrics:
+      type: object
+      properties:
+        started_at:
+          type: string
+          format: date-time
+        request_count:
+          type: integer
+        error_count:
+          type: integer
+        average_duration_ms:
+          type: number
+        statuses:
+          type: object
+          additionalProperties:
+            type: integer
+        methods:
+          type: object
+          additionalProperties:
+            type: integer
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        role:
+          enum: [owner, receptionist, teacher, student]
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Principal:
+      type: object
+      properties:
+        user_id:
+          type: string
+        branch_id:
+          type: string
+        role:
+          enum: [owner, receptionist, teacher, student]
+    Session:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        principal:
+          $ref: "#/components/schemas/Principal"
+        branch:
+          $ref: "#/components/schemas/Branch"
+        capabilities:
+          type: array
+          items:
+            type: string
+        dashboard_path:
+          type: string
+    Branch:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Student:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        user_id:
+          type: string
+        fin:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        status:
+          enum: [active, left]
+        left_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Teacher:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          enum: [pending_owner_approval, active, terminated]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        name:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Class:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        course_id:
+          type: string
+        teacher_id:
+          type: string
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        class_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+        material_file_id:
+          type: string
+        created_by_user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        student_id:
+          type: string
+        amount_cents:
+          type: integer
+        currency:
+          type: string
+        due_date:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+        status:
+          enum: [pending, paid, overdue, cancelled]
+        receipt_file_id:
+          type: string
+        created_by_user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    FileObject:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        uploader_user_id:
+          type: string
+        owner_type:
+          type: string
+        owner_id:
+          type: string
+        category:
+          enum: [standard, special]
+        purpose:
+          enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
+        original_filename:
+          type: string
+        mime_type:
+          type: string
+        original_size_bytes:
+          type: integer
+        stored_size_bytes:
+          type: integer
+        original_sha256:
+          type: string
+        storage_bucket:
+          type: string
+        storage_key:
+          type: string
+        retention_until:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        recipient_user_id:
+          type: string
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        dedupe_key:
+          type: string
+        read_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    OutboxEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          enum: [pending, publishing, published, failed]
+        attempts:
+          type: integer
+        next_attempt_at:
+          type: string
+          format: date-time
+        locked_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        published_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    BootstrapOwnerInput:
+      type: object
+      required: [email, password, first_name, last_name]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          minLength: 8
+        first_name:
+          type: string
+        last_name:
+          type: string
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
