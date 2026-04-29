@@ -1,0 +1,26 @@
+{
+  "setup": {
+    "eyebrow": "Initial setup",
+    "title": "Kingsway Operation Center",
+    "description": "Frontend architecture is ready for role-based panels, multilingual content, dark mode, and data-driven dashboards."
+  },
+  "login": {
+    "eyebrow": "Secure workspace",
+    "headline": "Branch operations, finance, classes, files, and alerts in one role-based console.",
+    "welcome": "Welcome to",
+    "portal": "Kingsway portal",
+    "heroCaption": "Login to access your account",
+    "formTitle": "Login",
+    "formDescription": "Enter your account details",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "submit": "Login",
+    "pending": "Logging in",
+    "signUpPrompt": "Don't have an account?",
+    "signUp": "Sign up",
+    "invalidCredentials": "Email or password is incorrect.",
+    "backendUnavailable": "Backend is unavailable.",
+    "invalidInput": "Enter a valid email and password."
+  }
+}
