@@ -1,0 +1,26 @@
+{
+  "setup": {
+    "eyebrow": "Ilkin qurasdirma",
+    "title": "Kingsway Emeliyyat Merkezi",
+    "description": "Frontend arxitekturasi rol esasli paneller, coxdilli mezmun, dark mode ve melumat yonumlu dashboardlar ucun hazirdir."
+  },
+  "login": {
+    "eyebrow": "Tehlukesiz is sahesi",
+    "headline": "Filial emeliyyati, maliyye, sinifler, fayllar ve bildirisler tek rol esasli konsolda.",
+    "welcome": "Kingsway'e",
+    "portal": "xos geldiniz",
+    "heroCaption": "Hesabiniza kecid ucun daxil olun",
+    "formTitle": "Giris",
+    "formDescription": "Hesab melumatlarinizi daxil edin",
+    "email": "E-poct",
+    "password": "Sifre",
+    "forgotPassword": "Sifremi unutdum",
+    "submit": "Giris",
+    "pending": "Daxil olunur",
+    "signUpPrompt": "Hesabiniz yoxdur?",
+    "signUp": "Qeydiyyat",
+    "invalidCredentials": "E-poct ve ya sifre sehvdir.",
+    "backendUnavailable": "Backend elcatmazdir.",
+    "invalidInput": "Duzgun e-poct ve sifre daxil edin."
+  }
+}

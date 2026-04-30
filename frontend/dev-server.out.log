@@ -1,0 +1,24 @@
+
+> frontend@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3000
+
+▲ Next.js 16.2.4 (Turbopack)
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 796ms
+
+ GET /en 307 in 2.2s (next.js: 1489ms, proxy.ts: 238ms, generate-params: 1229ms, application-code: 448ms)
+ GET /en/login 200 in 2.6s (next.js: 2.3s, proxy.ts: 234ms, generate-params: 810ms, application-code: 101ms)
+ GET /en 307 in 167ms (next.js: 18ms, proxy.ts: 14ms, generate-params: 9ms, application-code: 135ms)
+ GET /en/login?next=%2Fen%2Fdashboard%2Fowner 200 in 102ms (next.js: 17ms, proxy.ts: 5ms, generate-params: 7ms, application-code: 79ms)
+ HEAD /en/dashboard/owner 200 in 2.0s (next.js: 1726ms, proxy.ts: 11ms, application-code: 263ms)
+ GET /en/dashboard/owner 200 in 376ms (next.js: 15ms, proxy.ts: 6ms, application-code: 355ms)
+✓ Compiled in 103ms
+ GET /en/login 200 in 704ms (next.js: 242ms, proxy.ts: 131ms, generate-params: 15ms, application-code: 331ms)
+ GET /en/dashboard/owner 200 in 939ms (next.js: 210ms, proxy.ts: 44ms, application-code: 685ms)
+▲ Next.js 16.2.4 (Turbopack)
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 937ms
+
+[?25h
