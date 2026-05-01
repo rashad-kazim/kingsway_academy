@@ -128,7 +128,7 @@
   body:has([data-login-page]) {
     height: 100%;
     overflow: hidden;
-    background: #1f1f1f;
+    background: #fdfdfd;
   }
   a,
   button:not(:disabled),
@@ -146,5 +146,87 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+.login-bubble-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-bubble-layer--left {
+  clip-path: inset(0 57% 0 0);
+}
+
+.login-bubble-layer--right {
+  clip-path: inset(0 0 0 43%);
+}
+
+.login-bubble {
+  position: absolute;
+  left: var(--bubble-x);
+  bottom: calc(var(--bubble-size) * -1.25);
+  width: var(--bubble-size);
+  height: var(--bubble-size);
+  border-radius: 9999px;
+  opacity: var(--bubble-opacity);
+  background:
+    radial-gradient(circle at 32% 26%, rgb(255 255 255 / var(--bubble-highlight)), rgb(var(--bubble-fill) / var(--bubble-core)) 34%, rgb(var(--bubble-fill) / var(--bubble-edge)) 64%, transparent 74%);
+  box-shadow:
+    inset 0 0 34px rgb(255 255 255 / 0.24),
+    0 16px 54px rgb(8 29 58 / 0.08);
+  animation: login-bubble-rise var(--bubble-duration) linear infinite;
+  animation-delay: var(--bubble-delay);
+}
+
+.login-bubble--left {
+  --bubble-fill: 227 227 232;
+  --bubble-opacity: 1;
+  --bubble-highlight: 0.46;
+  --bubble-core: 0.88;
+  --bubble-edge: 0.52;
+}
+
+.login-bubble--right {
+  --bubble-fill: 35 75 120;
+  --bubble-opacity: 0.18;
+  --bubble-highlight: 0.28;
+  --bubble-core: 0.82;
+  --bubble-edge: 0.46;
+}
+
+@media (width < 64rem) {
+  .login-bubble-layer--left {
+    clip-path: none;
+  }
+
+  .login-bubble-layer--right {
+    display: none;
+  }
+
+  .login-bubble--right {
+    --bubble-fill: 227 227 232;
+    --bubble-opacity: 0.86;
+  }
+}
+
+@keyframes login-bubble-rise {
+  0% {
+    transform: translate3d(calc(var(--bubble-drift) * -0.25), 18vh, 0) scale(0.82);
+  }
+  45% {
+    transform: translate3d(calc(var(--bubble-drift) * 0.55), -42vh, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(var(--bubble-drift), -126vh, 0) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bubble {
+    animation: none;
+    transform: translate3d(0, 0, 0);
   }
 }

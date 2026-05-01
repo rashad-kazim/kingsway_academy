@@ -7,38 +7,65 @@ This file is the running memory for the project. At the start of each work sessi
 - Product: smart operation center for IELTS/SAT-focused education centers.
 - Frontend: Next.js App Router, TypeScript, Tailwind, shadcn/ui, EN/TR/AZ JSON i18n, dark/light mode.
 - Backend: Go, modular service boundaries, PostgreSQL-first data model, event-ready finance/file/notification flows.
-- Current build priority: frontend implementation/integration on top of the Dockerized full stack.
-- Docker status: Docker Desktop is installed and running. `docker info` succeeds with context `desktop-linux`, Docker `29.4.1`, Compose `v5.1.3`, and WSL distro `docker-desktop` running on WSL2.
+- Current build priority: full local development through native services while Docker is paused.
+- Historical Docker status: Docker Desktop was installed and verified earlier, but Docker is not used in the active workflow.
 - Docker storage: Docker app files are under `D:\Docker\Docker`; Docker WSL/data root is configured as `D:\DockerData`, so images/containers should use D instead of filling C.
 - WSL status: no separate Ubuntu distro is required for current Docker use; Docker's own `docker-desktop` WSL2 distro is enough.
 - Current checked disk free space after Docker infra pull/start: `C:` about 32.11 GB, `D:` about 191.05 GB, `E:` about 477.42 GB.
-- Database direction: Docker local infrastructure is now active. PostgreSQL/Redis/RabbitMQ/MinIO containers are running and backend defaults to PostgreSQL persistence.
-- Full-stack Docker status: root `compose.yaml` runs frontend, backend API, PostgreSQL, Redis, RabbitMQ, and MinIO together.
+- Database direction: PostgreSQL remains the backend persistence target. Local PostgreSQL/Redis/RabbitMQ/MinIO now run from native Scoop-installed binaries under the root `start-kingsway.cmd` workflow.
+- Full-stack Docker status: root `compose.yaml` still exists for future full-stack runs, but it is parked until the user explicitly asks to use Docker again.
+- Active workflow override as of 2026-05-02: Docker usage is paused until the user explicitly enables it again. Frontend changes should be run and checked through the local Next.js dev server for immediate feedback.
 
-## One-Command Local Run
+## Active Local Run
 
-Run the full stack from the project root:
+Use this workflow while Docker is paused:
+
+```bash
+start-kingsway.cmd
+```
+
+That script starts, without Docker:
+
+- Frontend: `http://127.0.0.1:3000/en/login`
+- Backend: `http://127.0.0.1:8080/healthz`
+- PostgreSQL on `127.0.0.1:5432`
+- Redis on `127.0.0.1:6379`
+- RabbitMQ on `127.0.0.1:5672`
+- MinIO API on `127.0.0.1:9000`
+- MinIO Console on `127.0.0.1:9001`
+
+Default local login after first start:
+
+- Email: `owner@kingsway.local`
+- Password: `Kingsway123!`
+
+Stop all local processes started by the script:
+
+```bash
+stop-kingsway.cmd
+```
+
+Data and logs live in `.runtime/`, which is ignored by git. `frontend/.env.local` and `backend/.env` are created automatically when missing.
+
+For frontend-only quick UI iteration, use:
+
+```bash
+cd frontend
+npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+## Docker Full-Stack Run
+
+Docker is parked until the user explicitly re-enables it. Do not run `docker compose` for local startup or frontend iteration in the current workflow.
+
+Historical command retained only for later:
+
 
 ```bash
 docker compose up -d --build
 ```
 
-On Windows, double-click `start-kingsway.cmd` for the same startup flow. Double-click `stop-kingsway.cmd` to stop containers without deleting data.
-
-Open:
-
-- Frontend: `http://127.0.0.1:3000/en/login`
-- API health: `http://127.0.0.1:8080/healthz`
-- RabbitMQ UI: `http://127.0.0.1:15672` with `kingsway` / `kingsway`
-- MinIO Console: `http://127.0.0.1:9001` with `kingsway` / `kingsway-secret`
-
-Stop without deleting data:
-
-```bash
-docker compose down
-```
-
-Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Redis/MinIO data.
+Only use Docker again after explicit instruction.
 
 ## Role Panels
 
@@ -87,15 +114,40 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
   - Added backend and frontend production Dockerfiles plus `.dockerignore` files.
   - Configured Next.js standalone output for the frontend container.
   - Added configurable frontend auth cookie security so local HTTP Docker login can work while production can still use Secure cookies.
-- Frontend login design pass completed 2026-04-29:
-  - Rebuilt `/[locale]/login` to match the provided split dark/purple reference layout.
-  - Added Kingsway Academy logo and login illustration assets under `frontend/public/images`.
+- Frontend login redesign completed 2026-04-30:
+  - Rebuilt `/[locale]/login` as a full-screen responsive education-themed page with a white login card.
+  - Removed the Student/Teacher switcher from the provided reference because Kingsway login is role-neutral.
   - Kept login as a shared multi-role entry point based on `Roles.docx`; backend session still routes users to the correct role dashboard.
   - Added password visibility toggle and localized login copy for EN/TR/AZ.
-- Frontend login correction pass completed 2026-04-29:
-  - Removed the blue frame, outer padding, and visible logo from `/[locale]/login`.
-  - Made the login page viewport-locked with no page scroll.
+  - Removed unused image assets; the login scene is now CSS/HTML-based and the only retained app image is `src/app/favicon.ico`.
   - Added global pointer cursor behavior for active clickable controls.
+- Frontend login redesign updated 2026-05-01:
+  - Rebuilt `/[locale]/login` again against the latest split-screen reference.
+  - Added the provided right-side education illustration at `frontend/public/images/login-right-side.png` and renders it as a foreground image, not a dark full-panel background.
+  - Added an icon-only transparent Kingsway mark at `frontend/public/images/kingsway-mark.png`; the academy text is excluded from the login logo.
+  - Applied the requested login palette: left background `rgb(245,247,250)`, left shapes `rgb(230,234,240)`, right gradient from `rgb(10,40,75)` to `rgb(15,55,100)`, and right shapes `rgb(35,75,120)` at low opacity.
+  - Moved animated bubble shapes behind the content, removed the right-side bottom red line, reduced the left form scale, and reduced the right hero headline size.
+  - Current retained app images are only the favicon plus the two used login assets.
+- Frontend login adjustment and Docker pause completed 2026-05-02:
+  - Moved login bubbles into one full-page background layer so bubbles no longer get clipped at the left/right split.
+  - Updated login colors: left background `rgb(253,253,253)`, left bubble color `rgb(248,248,249)`, and labels/normal input borders use the right-side navy `#0a284b`.
+  - Login inputs now use black text, `rgb(253,253,253)` backgrounds, navy borders by default, and red borders only for invalid login/input states.
+  - Regenerated the icon-only Kingsway mark with transparent outer background and increased its displayed size.
+  - Disabled the Next.js dev indicator so local frontend previews do not show the bottom-left dev badge.
+  - Docker usage is paused until explicitly re-enabled by the user; frontend iteration now uses local `npm run dev`.
+- Docker-free local infrastructure completed 2026-05-02:
+  - Installed/verified native local PostgreSQL 16, Redis, RabbitMQ/Erlang, and MinIO through Scoop.
+  - Reworked `start-kingsway.cmd` to start PostgreSQL, Redis, RabbitMQ, MinIO, backend, and frontend without Docker.
+  - Reworked `stop-kingsway.cmd` to stop the local app processes and infrastructure started for this project.
+  - Added `.runtime/` for ignored local data/logs/PID files.
+  - First local DB start creates default owner login `owner@kingsway.local` / `Kingsway123!` if no owner exists.
+- Frontend login bubble correction completed 2026-05-02:
+  - Login bubbles now render through separate clipped left/right background layers, so a bubble crossing the center split takes the left bubble color on the left side and the right bubble color on the right side.
+  - Left-side bubbles were made more visible.
+  - The right-side login illustration now sits at `bottom: 0`.
+- Frontend login logo/bubble color adjustment completed 2026-05-02:
+  - Left login bubbles now use `#e3e3e8`.
+  - Login logo now uses the provided square `frontend/public/images/kingsway-mark.png` dimensions and renders larger.
 - Backend initialized:
   - Go module `kingsway/backend`
   - Basic service folders: auth, academic, finance, files, notification
@@ -176,17 +228,38 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
     - `GET http://127.0.0.1:8080/healthz` returned `ok`.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
     - Owner bootstrap plus `GET http://127.0.0.1:3000/en/dashboard/owner` with the JWT cookie returned `200 OK`.
-  - 2026-04-29 login redesign verification:
+  - 2026-04-30 login redesign verification:
     - `npm run lint` passed.
     - `npm run build` passed.
     - `docker compose up -d --build frontend` rebuilt and restarted the frontend container.
+    - `docker compose ps frontend api` showed both services healthy.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
-    - Chrome headless screenshots saved to `frontend/verification/login-desktop.png` and `frontend/verification/login-mobile.png`.
-    - Authenticated owner dashboard smoke test returned `200 OK` after login/bootstrap token setup.
-  - 2026-04-29 login correction verification:
+    - Chrome headless desktop, tablet, and mobile screenshots were generated for visual QA, then removed so no unused image files remain.
+  - 2026-05-01 latest login redesign verification:
     - `npm run lint` passed.
     - `npm run build` passed.
     - `docker compose up -d --build frontend` rebuilt and restarted the frontend container.
+    - `docker compose ps frontend api` showed both services healthy.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Chrome headless desktop and mobile screenshots were generated for visual QA, confirmed no horizontal clipping after adjustment, then removed so no unused verification images remain.
+  - 2026-05-02 Docker-paused frontend verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+    - Local Next dev server started with `npm run dev -- --hostname 127.0.0.1 --port 3000`.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Chrome headless mobile screenshot confirmed the dev indicator is hidden and the mobile form no longer clips; screenshot was removed afterward.
+  - 2026-05-02 Docker-free full local verification:
+    - `start-kingsway.cmd` started frontend, backend, PostgreSQL, Redis, RabbitMQ, and MinIO without Docker.
+    - Listening ports verified: `3000`, `8080`, `5432`, `6379`, `5672`, `9000`, and `9001`.
+    - `GET http://127.0.0.1:8080/healthz` returned `200 OK`.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Login with `owner@kingsway.local` / `Kingsway123!` succeeded and `GET /v1/session` returned `/dashboard/owner`.
+    - `stop-kingsway.cmd` stopped frontend, backend, PostgreSQL, Redis, RabbitMQ, and MinIO.
+  - 2026-05-02 login bubble correction verification:
+    - `npm run lint` passed.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+  - 2026-05-02 login logo/bubble color verification:
+    - `npm run lint` passed.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
 - Backend:
   - `go mod verify` passed.
@@ -251,7 +324,7 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
 - Persistent audit-log storage is deferred. The backend now has structured request logging with `X-Request-ID`, but immutable per-action audit rows are not implemented yet.
 - Deep readiness checks are deferred. `GET /readyz` reports API readiness; live dependency pings for PostgreSQL/Redis/RabbitMQ/MinIO are still not wired after startup.
 - Frontend broad screen implementation is still pending beyond login/session and role dashboard shell.
-- Docker Desktop installation troubleshooting is complete; no more Docker installation steps are currently needed.
+- Docker Desktop installation troubleshooting is complete; Docker remains parked and is not part of current startup.
 
 ## Next Steps
 
