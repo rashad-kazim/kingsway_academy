@@ -4,6 +4,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $RuntimeDir = Join-Path $Root ".runtime"
 $FrontendPid = Join-Path $RuntimeDir "frontend.pid"
 $BackendPid = Join-Path $RuntimeDir "backend.pid"
+$BackendWatchPid = Join-Path $RuntimeDir "backend-watch.pid"
 $RedisPid = Join-Path $RuntimeDir "redis.pid"
 $MinioPid = Join-Path $RuntimeDir "minio.pid"
 $RabbitPid = Join-Path $RuntimeDir "rabbitmq.pid"
@@ -31,6 +32,7 @@ function Stop-PidFile {
 }
 
 Stop-PidFile -Path $FrontendPid -Name "frontend"
+Stop-PidFile -Path $BackendWatchPid -Name "backend watcher"
 Stop-PidFile -Path $BackendPid -Name "backend"
 Stop-PidFile -Path $RedisPid -Name "redis"
 Stop-PidFile -Path $MinioPid -Name "minio"

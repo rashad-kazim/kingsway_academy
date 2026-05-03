@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginAction, type LoginActionState } from "@/lib/auth/actions";
+import { useDevAssetSrc } from "@/lib/use-dev-asset-src";
 
 type LoginFormLabels = {
   title: string;
@@ -35,6 +36,7 @@ const initialState: LoginActionState = {};
 export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
   const [state, formAction] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
+  const logoSrc = useDevAssetSrc("/images/kingsway-mark.png");
   const message = errorMessage(state.error, labels);
   const hasCredentialError =
     state.error === "invalid_credentials" || state.error === "invalid_input";
@@ -46,10 +48,11 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
     <div className="relative z-30 w-[80vw] max-w-[296px] sm:w-full sm:max-w-[360px]">
       <div className="mb-8 flex justify-center">
         <Image
-          src="/images/kingsway-mark.png"
+          src={logoSrc}
           width={501}
           height={499}
           priority
+          unoptimized={process.env.NODE_ENV === "development"}
           alt="Kingsway"
           className="h-auto w-[120px] sm:w-[138px]"
         />

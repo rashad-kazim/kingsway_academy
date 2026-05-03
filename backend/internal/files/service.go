@@ -1,12 +1,15 @@
 package files
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -180,10 +183,12 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 		return domain.FileObject{}, domain.ErrInvalidInput
 	}
 
-	hash := sha256.New()
-	key := storageKey(input.BranchID, input.Category, input.OriginalFilename)
-	content := io.TeeReader(input.Content, hash)
-	if err := s.storage.Put(ctx, bucket, key, content, input.Size, input.MimeType); err != nil {
+	upload, err := prepareUploadContent(input)
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	key := storageKey(input.BranchID, input.Category, upload.filename)
+	if err := s.storage.Put(ctx, bucket, key, bytes.NewReader(upload.content), upload.storedSize, upload.mimeType); err != nil {
 		return domain.FileObject{}, err
 	}
 
@@ -194,11 +199,11 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 		OwnerID:           strings.TrimSpace(input.OwnerID),
 		Category:          input.Category,
 		Purpose:           input.Purpose,
-		OriginalFilename:  strings.TrimSpace(input.OriginalFilename),
-		MimeType:          strings.TrimSpace(input.MimeType),
+		OriginalFilename:  upload.filename,
+		MimeType:          upload.mimeType,
 		OriginalSizeBytes: input.Size,
-		StoredSizeBytes:   input.Size,
-		OriginalSHA256:    hex.EncodeToString(hash.Sum(nil)),
+		StoredSizeBytes:   upload.storedSize,
+		OriginalSHA256:    upload.originalSHA256,
 		StorageBucket:     bucket,
 		StorageKey:        key,
 	})
@@ -208,6 +213,104 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 	s.publishFileEvents(ctx, file)
 
 	return file, nil
+}
+
+type preparedUpload struct {
+	content        []byte
+	filename       string
+	mimeType       string
+	storedSize     int64
+	originalSHA256 string
+}
+
+func prepareUploadContent(input UploadFileInput) (preparedUpload, error) {
+	original, err := io.ReadAll(input.Content)
+	if err != nil {
+		return preparedUpload{}, err
+	}
+
+	hash := sha256.Sum256(original)
+	upload := preparedUpload{
+		content:        original,
+		filename:       strings.TrimSpace(input.OriginalFilename),
+		mimeType:       normalizedUploadMIME(input.MimeType, original, input.OriginalFilename),
+		storedSize:     int64(len(original)),
+		originalSHA256: hex.EncodeToString(hash[:]),
+	}
+
+	if !isProfileImageUpload(input) {
+		return upload, nil
+	}
+	if !isAllowedProfileImageType(upload.mimeType) {
+		return preparedUpload{}, domain.ErrInvalidInput
+	}
+
+	optimized, err := optimizeProfileImage(original, upload.filename)
+	if err != nil {
+		return preparedUpload{}, domain.ErrInvalidInput
+	}
+	upload.content = optimized.content
+	upload.filename = optimized.filename
+	upload.mimeType = optimized.mimeType
+	upload.storedSize = int64(len(optimized.content))
+
+	return upload, nil
+}
+
+func isProfileImageUpload(input UploadFileInput) bool {
+	return input.Category == domain.FileCategoryStandard &&
+		input.Purpose == domain.FilePurposeProfile
+}
+
+func isAllowedProfileImageType(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg", "image/png", "image/webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedUploadMIME(mimeType string, content []byte, filename string) string {
+	raw := strings.TrimSpace(strings.Split(mimeType, ";")[0])
+	switch strings.ToLower(raw) {
+	case "image/jpeg", "image/jpg", "image/pjpeg":
+		return "image/jpeg"
+	case "image/png", "image/x-png":
+		return "image/png"
+	case "image/webp":
+		return "image/webp"
+	case "", "application/octet-stream":
+		// Some browsers/OS integrations omit image MIME. Fall through to sniffing.
+	default:
+		return raw
+	}
+
+	detected := strings.ToLower(strings.TrimSpace(http.DetectContentType(content)))
+	switch detected {
+	case "image/jpeg", "image/png", "image/webp":
+		return detected
+	}
+	if isWebP(content) {
+		return "image/webp"
+	}
+
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	default:
+		return detected
+	}
+}
+
+func isWebP(content []byte) bool {
+	return len(content) >= 12 &&
+		string(content[0:4]) == "RIFF" &&
+		string(content[8:12]) == "WEBP"
 }
 
 func (s *Service) ListFiles(ctx context.Context, actor domain.Principal, branchID string) ([]domain.FileObject, error) {
@@ -266,6 +369,36 @@ func (s *Service) CreateDownloadURL(ctx context.Context, actor domain.Principal,
 		ExpiresAt: time.Now().UTC().Add(expiry),
 		File:      file,
 	}, nil
+}
+
+func (s *Service) DeleteFile(ctx context.Context, actor domain.Principal, fileID string) (domain.FileObject, error) {
+	if s.storage == nil {
+		return domain.FileObject{}, domain.ErrInvalidInput
+	}
+
+	file, err := s.store.GetFile(ctx, strings.TrimSpace(fileID))
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	if file.DeletedAt != nil {
+		return domain.FileObject{}, domain.ErrNotFound
+	}
+	if err := auth.RequireBranch(actor, file.BranchID); err != nil {
+		return domain.FileObject{}, err
+	}
+	if err := s.storage.Delete(ctx, file.StorageBucket, file.StorageKey); err != nil {
+		return domain.FileObject{}, err
+	}
+
+	deleted, err := s.store.MarkFileDeleted(ctx, file.ID, time.Now().UTC())
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	if s.events != nil {
+		_ = s.events.Publish(ctx, "files.file.deleted", deleted)
+	}
+
+	return deleted, nil
 }
 
 func (s *Service) CleanupExpiredFiles(ctx context.Context, actor domain.Principal, limit int) (RetentionCleanupResult, error) {

@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { LoginForm } from "@/components/auth/login-form";
 import { currentSession } from "@/lib/auth/session";
+import { appAsset } from "@/lib/assets";
 
 type LoginPageProps = {
   params: Promise<{
@@ -84,11 +85,12 @@ export default async function LoginPage({
             </p>
           </div>
           <Image
-            src="/images/login-right-side.png"
+            src={appAsset("/images/login-right-side.png")}
             priority
             alt=""
             width={860}
             height={573}
+            unoptimized={process.env.NODE_ENV === "development"}
             sizes="(min-width: 1024px) 48vw, 0vw"
             className="absolute bottom-0 right-[6%] z-10 h-auto w-[min(48vw,760px)] object-contain opacity-100"
           />

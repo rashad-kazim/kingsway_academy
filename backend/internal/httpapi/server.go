@@ -34,6 +34,8 @@ type Server struct {
 	metrics  *requestMetrics
 }
 
+const maxUploadFileBytes int64 = 10 << 20
+
 func New(
 	authService *auth.Service,
 	academicService *academic.Service,
@@ -83,6 +85,12 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("GET /v1/branches", s.requireAuth(s.listBranches))
 	s.mux.HandleFunc("POST /v1/branches", s.requireAuth(s.createBranch))
+	s.mux.HandleFunc("GET /v1/branches/", s.requireAuth(s.branchAction))
+	s.mux.HandleFunc("POST /v1/branches/", s.requireAuth(s.branchAction))
+	s.mux.HandleFunc("PATCH /v1/branches/", s.requireAuth(s.branchAction))
+	s.mux.HandleFunc("DELETE /v1/branches/", s.requireAuth(s.branchAction))
+	s.mux.HandleFunc("PATCH /v1/staff/", s.requireAuth(s.staffAction))
+	s.mux.HandleFunc("DELETE /v1/staff/", s.requireAuth(s.staffAction))
 
 	s.mux.HandleFunc("GET /v1/students", s.requireAuth(s.listStudents))
 	s.mux.HandleFunc("POST /v1/students", s.requireAuth(s.createStudent))
@@ -109,6 +117,7 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("GET /v1/rooms", s.requireAuth(s.listRooms))
 	s.mux.HandleFunc("POST /v1/rooms", s.requireAuth(s.createRoom))
+	s.mux.HandleFunc("DELETE /v1/rooms/", s.requireAuth(s.roomAction))
 
 	s.mux.HandleFunc("GET /v1/schedules", s.requireAuth(s.listSchedule))
 	s.mux.HandleFunc("POST /v1/schedules", s.requireAuth(s.createScheduleItem))
@@ -138,6 +147,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/files/upload", s.requireAuth(s.uploadFile))
 	s.mux.HandleFunc("POST /v1/files/retention/cleanup", s.requireAuth(s.cleanupFileRetention))
 	s.mux.HandleFunc("GET /v1/files/", s.requireAuth(s.fileAction))
+	s.mux.HandleFunc("DELETE /v1/files/", s.requireAuth(s.fileAction))
 
 	s.mux.HandleFunc("GET /v1/notifications", s.requireAuth(s.listNotifications))
 	s.mux.HandleFunc("POST /v1/notifications/", s.requireAuth(s.notificationAction))
@@ -253,6 +263,125 @@ func (s *Server) listBranches(w http.ResponseWriter, r *http.Request, principal 
 		return
 	}
 	writePagedJSON(w, r, branches)
+}
+
+func (s *Server) branchAction(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	parts := splitPath(strings.TrimPrefix(r.URL.Path, "/v1/branches/"))
+	if len(parts) == 2 && parts[1] == "staff" {
+		s.branchStaffAction(w, r, principal, parts[0])
+		return
+	}
+	if len(parts) != 1 || parts[0] == "" {
+		writeError(w, domain.ErrNotFound)
+		return
+	}
+	id := parts[0]
+
+	if r.Method == http.MethodDelete {
+		branchFiles, err := s.files.ListFiles(r.Context(), principal, id)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		for _, file := range branchFiles {
+			if _, err := s.files.DeleteFile(r.Context(), principal, file.ID); err != nil && !errors.Is(err, domain.ErrNotFound) {
+				writeError(w, err)
+				return
+			}
+		}
+
+		branch, err := s.academic.DeleteBranch(r.Context(), principal, id)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, branch)
+		return
+	}
+
+	if r.Method != http.MethodPatch {
+		writeError(w, domain.ErrNotFound)
+		return
+	}
+
+	var input academic.UpdateBranchInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.ID = id
+	branch, err := s.academic.UpdateBranch(r.Context(), principal, input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, branch)
+}
+
+func (s *Server) branchStaffAction(w http.ResponseWriter, r *http.Request, principal domain.Principal, branchID string) {
+	switch r.Method {
+	case http.MethodGet:
+		staff, err := s.academic.ListStaffMembers(r.Context(), principal, branchID)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writePagedJSON(w, r, staff)
+	case http.MethodPost:
+		var input academic.CreateStaffInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		input.BranchID = branchID
+		staff, err := s.academic.CreateStaffMember(r.Context(), principal, input)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, staff)
+	default:
+		writeError(w, domain.ErrNotFound)
+	}
+}
+
+func (s *Server) staffAction(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	parts := splitPath(strings.TrimPrefix(r.URL.Path, "/v1/staff/"))
+	if len(parts) != 1 || parts[0] == "" {
+		writeError(w, domain.ErrNotFound)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		staff, err := s.academic.DeleteStaffMember(r.Context(), principal, parts[0])
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if staff.ProfilePhotoFileID != "" {
+			if _, err := s.files.DeleteFile(r.Context(), principal, staff.ProfilePhotoFileID); err != nil && !errors.Is(err, domain.ErrNotFound) {
+				writeError(w, err)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, staff)
+		return
+	}
+
+	if r.Method != http.MethodPatch {
+		writeError(w, domain.ErrNotFound)
+		return
+	}
+
+	var input academic.UpdateStaffInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.ID = parts[0]
+	staff, err := s.academic.UpdateStaffMember(r.Context(), principal, input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, staff)
 }
 
 func (s *Server) createStudent(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -569,6 +698,21 @@ func (s *Server) listRooms(w http.ResponseWriter, r *http.Request, principal dom
 	writePagedJSON(w, r, rooms)
 }
 
+func (s *Server) roomAction(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/rooms/"), "/")
+	if id == "" || r.Method != http.MethodDelete {
+		writeError(w, domain.ErrNotFound)
+		return
+	}
+
+	room, err := s.academic.RemoveRoom(r.Context(), principal, id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, room)
+}
+
 func (s *Server) createScheduleItem(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateScheduleItemInput
 	if !decodeJSON(w, r, &input) {
@@ -789,8 +933,8 @@ func (s *Server) registerFile(w http.ResponseWriter, r *http.Request, principal 
 }
 
 func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
-	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 12<<20)
+	if err := r.ParseMultipartForm(12 << 20); err != nil {
 		writeError(w, domain.ErrInvalidInput)
 		return
 	}
@@ -801,6 +945,10 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request, principal do
 		return
 	}
 	defer content.Close()
+	if header.Size > maxUploadFileBytes {
+		writeError(w, domain.ErrInvalidInput)
+		return
+	}
 
 	mimeType := header.Header.Get("Content-Type")
 	if strings.TrimSpace(mimeType) == "" {
@@ -830,6 +978,15 @@ func (s *Server) fileAction(w http.ResponseWriter, r *http.Request, principal do
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if r.Method == http.MethodGet && len(parts) == 1 && parts[0] != "" {
 		file, err := s.files.GetFile(r.Context(), principal, parts[0])
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, file)
+		return
+	}
+	if r.Method == http.MethodDelete && len(parts) == 1 && parts[0] != "" {
+		file, err := s.files.DeleteFile(r.Context(), principal, parts[0])
 		if err != nil {
 			writeError(w, err)
 			return
@@ -939,6 +1096,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 	}
 
 	return true
+}
+
+func splitPath(path string) []string {
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return nil
+	}
+	return strings.Split(path, "/")
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

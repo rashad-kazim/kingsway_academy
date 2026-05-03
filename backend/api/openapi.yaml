@@ -114,6 +114,59 @@ paths:
       responses:
         "201":
           $ref: "#/components/responses/Branch"
+  /v1/branches/{branch_id}:
+    patch:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchPathID"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateBranch"
+      responses:
+        "200":
+          $ref: "#/components/responses/Branch"
+    delete:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchPathID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Branch"
+  /v1/branches/{branch_id}/staff:
+    get:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchPathID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/StaffList"
+    post:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/BranchPathID"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateStaff"
+      responses:
+        "201":
+          $ref: "#/components/responses/Staff"
+  /v1/staff/{staff_id}:
+    patch:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/StaffID"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateStaff"
+      responses:
+        "200":
+          $ref: "#/components/responses/Staff"
+    delete:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/StaffID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Staff"
   /v1/students:
     get:
       tags: [academic]
@@ -343,6 +396,14 @@ paths:
       responses:
         "201":
           description: Created room.
+  /v1/rooms/{room_id}:
+    delete:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/RoomID"
+      responses:
+        "200":
+          description: Deactivated room.
   /v1/schedules:
     get:
       tags: [academic]
@@ -557,6 +618,7 @@ paths:
   /v1/files/upload:
     post:
       tags: [files]
+      description: Uploads a file up to 10 MB. Use `standard` for normal files and `special` for very important files. Lossy optimization is not reversible. Special PDFs may have non-content metadata removed, but content must not be altered; Special JPG/PNG/WebP images should not be recompressed or quality-ratio converted. `standard` + `profile_photo` image uploads are optimized display assets at 768x768 JPEG quality 85 with metadata stripped.
       requestBody:
         required: true
         content:
@@ -583,6 +645,13 @@ paths:
           $ref: "#/components/responses/File"
   /v1/files/{file_id}:
     get:
+      tags: [files]
+      parameters:
+        - $ref: "#/components/parameters/FileID"
+      responses:
+        "200":
+          $ref: "#/components/responses/File"
+    delete:
       tags: [files]
       parameters:
         - $ref: "#/components/parameters/FileID"
@@ -680,6 +749,24 @@ components:
       in: query
       schema:
         type: string
+    BranchPathID:
+      name: branch_id
+      in: path
+      required: true
+      schema:
+        type: string
+    RoomID:
+      name: room_id
+      in: path
+      required: true
+      schema:
+        type: string
+    StaffID:
+      name: staff_id
+      in: path
+      required: true
+      schema:
+        type: string
     Limit:
       name: limit
       in: query
@@ -768,6 +855,12 @@ components:
                 type: string
               address:
                 type: string
+              opening_time:
+                type: string
+                example: "09:00"
+              closing_time:
+                type: string
+                example: "21:00"
     CreateStudent:
       required: true
       content:
@@ -797,6 +890,60 @@ components:
               password:
                 type: string
                 minLength: 8
+    CreateStaff:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [first_name, last_name, email, password]
+            properties:
+              first_name:
+                type: string
+              last_name:
+                type: string
+              birth_date:
+                type: string
+                example: "31/12/1998"
+              phone:
+                type: string
+              salary_amount_azn:
+                type: integer
+                minimum: 0
+              email:
+                type: string
+              password:
+                type: string
+                minLength: 8
+              profile_photo_file_id:
+                type: string
+    UpdateStaff:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [first_name, last_name, email]
+            properties:
+              first_name:
+                type: string
+              last_name:
+                type: string
+              birth_date:
+                type: string
+                example: "31/12/1998"
+              phone:
+                type: string
+              salary_amount_azn:
+                type: integer
+                minimum: 0
+              email:
+                type: string
+              password:
+                type: string
+                minLength: 8
+              profile_photo_file_id:
+                type: string
     RegisterTeacher:
       required: true
       content:
@@ -1108,6 +1255,27 @@ components:
             type: array
             items:
               $ref: "#/components/schemas/Branch"
+    Staff:
+      description: Branch staff member.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StaffMember"
+    StaffList:
+      description: Branch staff list.
+      headers:
+        X-Total-Count:
+          $ref: "#/components/headers/XTotalCount"
+        X-Limit:
+          $ref: "#/components/headers/XLimit"
+        X-Offset:
+          $ref: "#/components/headers/XOffset"
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/StaffMember"
     Student:
       description: Student.
       content:
@@ -1319,6 +1487,45 @@ components:
         slug:
           type: string
         address:
+          type: string
+        opening_time:
+          type: string
+          example: "09:00"
+        closing_time:
+          type: string
+          example: "21:00"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        user_id:
+          type: string
+        role:
+          enum: [receptionist]
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        birth_date:
+          type: string
+          example: "31/12/1998"
+        phone:
+          type: string
+        salary_amount_azn:
+          type: integer
+          minimum: 0
+        profile_photo_file_id:
           type: string
         created_at:
           type: string

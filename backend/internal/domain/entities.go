@@ -3,12 +3,14 @@ package domain
 import "time"
 
 type Branch struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Address   string    `json:"address,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Address     string    `json:"address,omitempty"`
+	OpeningTime string    `json:"opening_time,omitempty"`
+	ClosingTime string    `json:"closing_time,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type User struct {
@@ -22,6 +24,22 @@ type User struct {
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type StaffMember struct {
+	ID                 string    `json:"id"`
+	BranchID           string    `json:"branch_id"`
+	UserID             string    `json:"user_id"`
+	Role               Role      `json:"role"`
+	Email              string    `json:"email"`
+	FirstName          string    `json:"first_name"`
+	LastName           string    `json:"last_name"`
+	BirthDate          string    `json:"birth_date,omitempty"`
+	Phone              string    `json:"phone,omitempty"`
+	SalaryAmountAZN    int       `json:"salary_amount_azn"`
+	ProfilePhotoFileID string    `json:"profile_photo_file_id,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type Principal struct {

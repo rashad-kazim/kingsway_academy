@@ -13,7 +13,14 @@ import (
 type Store interface {
 	CreateBranch(ctx context.Context, branch domain.Branch) (domain.Branch, error)
 	GetBranch(ctx context.Context, id string) (domain.Branch, error)
+	UpdateBranch(ctx context.Context, branch domain.Branch) (domain.Branch, error)
+	DeleteBranch(ctx context.Context, id string) (domain.Branch, error)
 	ListBranches(ctx context.Context) ([]domain.Branch, error)
+	CreateStaffMember(ctx context.Context, user domain.User, staff domain.StaffMember) (domain.StaffMember, error)
+	UpdateStaffMember(ctx context.Context, staff domain.StaffMember, passwordHash string) (domain.StaffMember, error)
+	DeleteStaffMember(ctx context.Context, id string) (domain.StaffMember, error)
+	GetStaffMember(ctx context.Context, id string) (domain.StaffMember, error)
+	ListStaffMembers(ctx context.Context, branchID string) ([]domain.StaffMember, error)
 	CreateStudent(ctx context.Context, student domain.Student) (domain.Student, error)
 	GetStudent(ctx context.Context, id string) (domain.Student, error)
 	GetStudentByUser(ctx context.Context, userID string) (domain.Student, error)
@@ -36,6 +43,8 @@ type Store interface {
 	CreateAssignment(ctx context.Context, assignment domain.Assignment) (domain.Assignment, error)
 	ListAssignments(ctx context.Context, branchID string, classID string) ([]domain.Assignment, error)
 	CreateRoom(ctx context.Context, room domain.Room) (domain.Room, error)
+	GetRoom(ctx context.Context, id string) (domain.Room, error)
+	DeactivateRoom(ctx context.Context, id string) (domain.Room, error)
 	ListRooms(ctx context.Context, branchID string) ([]domain.Room, error)
 	CreateScheduleItem(ctx context.Context, item domain.ScheduleItem) (domain.ScheduleItem, error)
 	ListSchedule(ctx context.Context, branchID string) ([]domain.ScheduleItem, error)
@@ -57,9 +66,44 @@ type Service struct {
 }
 
 type CreateBranchInput struct {
-	Name    string `json:"name"`
-	Slug    string `json:"slug"`
-	Address string `json:"address"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Address     string `json:"address"`
+	OpeningTime string `json:"opening_time"`
+	ClosingTime string `json:"closing_time"`
+}
+
+type UpdateBranchInput struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Address     string `json:"address"`
+	OpeningTime string `json:"opening_time"`
+	ClosingTime string `json:"closing_time"`
+}
+
+type CreateStaffInput struct {
+	BranchID           string `json:"branch_id"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+	BirthDate          string `json:"birth_date"`
+	Phone              string `json:"phone"`
+	SalaryAmountAZN    int    `json:"salary_amount_azn"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	ProfilePhotoFileID string `json:"profile_photo_file_id"`
+}
+
+type UpdateStaffInput struct {
+	ID                 string `json:"id"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+	BirthDate          string `json:"birth_date"`
+	Phone              string `json:"phone"`
+	SalaryAmountAZN    int    `json:"salary_amount_azn"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	ProfilePhotoFileID string `json:"profile_photo_file_id"`
 }
 
 type CreateStudentInput struct {
@@ -173,11 +217,59 @@ func (s *Service) CreateBranch(ctx context.Context, actor domain.Principal, inpu
 		return domain.Branch{}, err
 	}
 
+	openingTime, err := normalizeClockTime(input.OpeningTime)
+	if err != nil {
+		return domain.Branch{}, err
+	}
+	closingTime, err := normalizeClockTime(input.ClosingTime)
+	if err != nil {
+		return domain.Branch{}, err
+	}
+
 	return s.store.CreateBranch(ctx, domain.Branch{
-		Name:    strings.TrimSpace(input.Name),
-		Slug:    strings.TrimSpace(input.Slug),
-		Address: strings.TrimSpace(input.Address),
+		Name:        strings.TrimSpace(input.Name),
+		Slug:        strings.TrimSpace(input.Slug),
+		Address:     strings.TrimSpace(input.Address),
+		OpeningTime: openingTime,
+		ClosingTime: closingTime,
 	})
+}
+
+func (s *Service) UpdateBranch(ctx context.Context, actor domain.Principal, input UpdateBranchInput) (domain.Branch, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.Branch{}, err
+	}
+
+	branch, err := s.store.GetBranch(ctx, input.ID)
+	if err != nil {
+		return domain.Branch{}, err
+	}
+	openingTime, err := normalizeClockTime(input.OpeningTime)
+	if err != nil {
+		return domain.Branch{}, err
+	}
+	closingTime, err := normalizeClockTime(input.ClosingTime)
+	if err != nil {
+		return domain.Branch{}, err
+	}
+	branch.Name = strings.TrimSpace(input.Name)
+	branch.Slug = strings.TrimSpace(input.Slug)
+	branch.Address = strings.TrimSpace(input.Address)
+	branch.OpeningTime = openingTime
+	branch.ClosingTime = closingTime
+
+	return s.store.UpdateBranch(ctx, branch)
+}
+
+func (s *Service) DeleteBranch(ctx context.Context, actor domain.Principal, id string) (domain.Branch, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.Branch{}, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return domain.Branch{}, domain.ErrInvalidInput
+	}
+
+	return s.store.DeleteBranch(ctx, strings.TrimSpace(id))
 }
 
 func (s *Service) ListBranches(ctx context.Context, actor domain.Principal) ([]domain.Branch, error) {
@@ -194,6 +286,112 @@ func (s *Service) ListBranches(ctx context.Context, actor domain.Principal) ([]d
 	}
 
 	return []domain.Branch{branch}, nil
+}
+
+func (s *Service) CreateStaffMember(ctx context.Context, actor domain.Principal, input CreateStaffInput) (domain.StaffMember, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.StaffMember{}, err
+	}
+	branchID := strings.TrimSpace(input.BranchID)
+	if err := auth.RequireBranch(actor, branchID); err != nil {
+		return domain.StaffMember{}, err
+	}
+	if _, err := s.store.GetBranch(ctx, branchID); err != nil {
+		return domain.StaffMember{}, err
+	}
+	if strings.TrimSpace(input.FirstName) == "" || strings.TrimSpace(input.LastName) == "" || strings.TrimSpace(input.Email) == "" || input.Password == "" {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	birthDate, err := normalizeBirthDate(input.BirthDate)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if input.SalaryAmountAZN < 0 {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	passwordHash, err := auth.HashPassword(input.Password)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+
+	return s.store.CreateStaffMember(ctx, domain.User{
+		BranchID:     branchID,
+		Role:         domain.RoleReceptionist,
+		Email:        strings.TrimSpace(input.Email),
+		PasswordHash: passwordHash,
+		FirstName:    strings.TrimSpace(input.FirstName),
+		LastName:     strings.TrimSpace(input.LastName),
+	}, domain.StaffMember{
+		BranchID:           branchID,
+		Role:               domain.RoleReceptionist,
+		BirthDate:          birthDate,
+		Phone:              strings.TrimSpace(input.Phone),
+		SalaryAmountAZN:    input.SalaryAmountAZN,
+		ProfilePhotoFileID: strings.TrimSpace(input.ProfilePhotoFileID),
+	})
+}
+
+func (s *Service) UpdateStaffMember(ctx context.Context, actor domain.Principal, input UpdateStaffInput) (domain.StaffMember, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.StaffMember{}, err
+	}
+	current, err := s.store.GetStaffMember(ctx, strings.TrimSpace(input.ID))
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if err := auth.RequireBranch(actor, current.BranchID); err != nil {
+		return domain.StaffMember{}, err
+	}
+	if strings.TrimSpace(input.FirstName) == "" || strings.TrimSpace(input.LastName) == "" || strings.TrimSpace(input.Email) == "" {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	birthDate, err := normalizeBirthDate(input.BirthDate)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if input.SalaryAmountAZN < 0 {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	passwordHash := ""
+	if strings.TrimSpace(input.Password) != "" {
+		passwordHash, err = auth.HashPassword(input.Password)
+		if err != nil {
+			return domain.StaffMember{}, err
+		}
+	}
+
+	current.FirstName = strings.TrimSpace(input.FirstName)
+	current.LastName = strings.TrimSpace(input.LastName)
+	current.Email = strings.TrimSpace(input.Email)
+	current.BirthDate = birthDate
+	current.Phone = strings.TrimSpace(input.Phone)
+	current.SalaryAmountAZN = input.SalaryAmountAZN
+	current.ProfilePhotoFileID = strings.TrimSpace(input.ProfilePhotoFileID)
+	return s.store.UpdateStaffMember(ctx, current, passwordHash)
+}
+
+func (s *Service) DeleteStaffMember(ctx context.Context, actor domain.Principal, id string) (domain.StaffMember, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.StaffMember{}, err
+	}
+	staff, err := s.store.GetStaffMember(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if err := auth.RequireBranch(actor, staff.BranchID); err != nil {
+		return domain.StaffMember{}, err
+	}
+	return s.store.DeleteStaffMember(ctx, staff.ID)
+}
+
+func (s *Service) ListStaffMembers(ctx context.Context, actor domain.Principal, branchID string) ([]domain.StaffMember, error) {
+	if !actor.IsOwner() {
+		branchID = actor.BranchID
+	}
+	if err := auth.RequireBranch(actor, strings.TrimSpace(branchID)); err != nil {
+		return nil, err
+	}
+	return s.store.ListStaffMembers(ctx, strings.TrimSpace(branchID))
 }
 
 func (s *Service) CreateStudent(ctx context.Context, actor domain.Principal, input CreateStudentInput) (domain.Student, error) {
@@ -648,6 +846,21 @@ func (s *Service) CreateRoom(ctx context.Context, actor domain.Principal, input 
 	})
 }
 
+func (s *Service) RemoveRoom(ctx context.Context, actor domain.Principal, id string) (domain.Room, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return domain.Room{}, err
+	}
+	room, err := s.store.GetRoom(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return domain.Room{}, err
+	}
+	if err := auth.RequireBranch(actor, room.BranchID); err != nil {
+		return domain.Room{}, err
+	}
+
+	return s.store.DeactivateRoom(ctx, room.ID)
+}
+
 func (s *Service) ListRooms(ctx context.Context, actor domain.Principal, branchID string) ([]domain.Room, error) {
 	if !actor.IsOwner() {
 		branchID = actor.BranchID
@@ -660,6 +873,31 @@ func (s *Service) ListRooms(ctx context.Context, actor domain.Principal, branchI
 	}
 
 	return s.store.ListRooms(ctx, branchID)
+}
+
+func normalizeClockTime(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if _, err := time.Parse("15:04", value); err != nil {
+		return "", domain.ErrInvalidInput
+	}
+
+	return value, nil
+}
+
+func normalizeBirthDate(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	parsed, err := time.Parse("02/01/2006", value)
+	if err != nil {
+		return "", domain.ErrInvalidInput
+	}
+
+	return parsed.Format("02/01/2006"), nil
 }
 
 func (s *Service) CreateScheduleItem(ctx context.Context, actor domain.Principal, input CreateScheduleItemInput) (domain.ScheduleItem, error) {

@@ -23,8 +23,96 @@ export type Branch = {
   name: string;
   slug: string;
   address?: string;
+  opening_time?: string;
+  closing_time?: string;
+  photo_url?: string;
+  photo_file_id?: string;
   created_at: string;
   updated_at: string;
+};
+
+export type CreateBranchInput = {
+  name: string;
+  slug: string;
+  address?: string;
+  opening_time?: string;
+  closing_time?: string;
+};
+
+export type UpdateBranchInput = CreateBranchInput;
+
+export type Room = {
+  id: string;
+  branch_id: string;
+  name: string;
+  capacity: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateRoomInput = {
+  branch_id: string;
+  name: string;
+  capacity: number;
+};
+
+export type StaffMember = {
+  id: string;
+  branch_id: string;
+  user_id: string;
+  role: Role;
+  email: string;
+  first_name: string;
+  last_name: string;
+  birth_date?: string;
+  phone?: string;
+  salary_amount_azn: number;
+  profile_photo_file_id?: string;
+  profile_photo_url?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateStaffInput = {
+  first_name: string;
+  last_name: string;
+  birth_date?: string;
+  phone?: string;
+  salary_amount_azn: number;
+  email: string;
+  password: string;
+  profile_photo_file_id?: string;
+};
+
+export type UpdateStaffInput = Omit<CreateStaffInput, "password"> & {
+  password?: string;
+};
+
+export type FileObject = {
+  id: string;
+  branch_id: string;
+  uploader_user_id: string;
+  owner_type: string;
+  owner_id: string;
+  category: "standard" | "special";
+  purpose: string;
+  original_filename: string;
+  mime_type: string;
+  original_size_bytes: number;
+  stored_size_bytes: number;
+  original_sha256: string;
+  storage_bucket: string;
+  storage_key: string;
+  retention_until?: string;
+  deleted_at?: string;
+  created_at: string;
+};
+
+export type DownloadURLResult = {
+  url: string;
+  expires_at: string;
+  file: FileObject;
 };
 
 export type Session = {

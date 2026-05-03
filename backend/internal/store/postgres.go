@@ -43,10 +43,10 @@ func (p *Postgres) CreateBranch(ctx context.Context, branch domain.Branch) (doma
 	}
 
 	row := p.pool.QueryRow(ctx, `
-		INSERT INTO branches (name, slug, address)
-		VALUES ($1, $2, nullif($3, ''))
-		RETURNING id::text, name, slug, coalesce(address, ''), created_at, updated_at
-	`, strings.TrimSpace(branch.Name), branch.Slug, strings.TrimSpace(branch.Address))
+		INSERT INTO branches (name, slug, address, opening_time, closing_time)
+		VALUES ($1, $2, nullif($3, ''), $4, $5)
+		RETURNING id::text, name, slug, coalesce(address, ''), opening_time, closing_time, created_at, updated_at
+	`, strings.TrimSpace(branch.Name), branch.Slug, strings.TrimSpace(branch.Address), strings.TrimSpace(branch.OpeningTime), strings.TrimSpace(branch.ClosingTime))
 
 	created, err := scanBranch(row)
 	if err != nil {
@@ -58,7 +58,7 @@ func (p *Postgres) CreateBranch(ctx context.Context, branch domain.Branch) (doma
 
 func (p *Postgres) GetBranch(ctx context.Context, id string) (domain.Branch, error) {
 	row := p.pool.QueryRow(ctx, `
-		SELECT id::text, name, slug, coalesce(address, ''), created_at, updated_at
+		SELECT id::text, name, slug, coalesce(address, ''), opening_time, closing_time, created_at, updated_at
 		FROM branches
 		WHERE id = $1
 	`, id)
@@ -71,9 +71,30 @@ func (p *Postgres) GetBranch(ctx context.Context, id string) (domain.Branch, err
 	return branch, nil
 }
 
+func (p *Postgres) UpdateBranch(ctx context.Context, branch domain.Branch) (domain.Branch, error) {
+	branch.Slug = normalizeSlug(branch.Slug)
+	if strings.TrimSpace(branch.Name) == "" || branch.Slug == "" {
+		return domain.Branch{}, domain.ErrInvalidInput
+	}
+
+	row := p.pool.QueryRow(ctx, `
+		UPDATE branches
+		SET name = $2, slug = $3, address = nullif($4, ''), opening_time = $5, closing_time = $6, updated_at = now()
+		WHERE id = $1
+		RETURNING id::text, name, slug, coalesce(address, ''), opening_time, closing_time, created_at, updated_at
+	`, branch.ID, strings.TrimSpace(branch.Name), branch.Slug, strings.TrimSpace(branch.Address), strings.TrimSpace(branch.OpeningTime), strings.TrimSpace(branch.ClosingTime))
+
+	updated, err := scanBranch(row)
+	if err != nil {
+		return domain.Branch{}, mapPostgresError(err)
+	}
+
+	return updated, nil
+}
+
 func (p *Postgres) ListBranches(ctx context.Context) ([]domain.Branch, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id::text, name, slug, coalesce(address, ''), created_at, updated_at
+		SELECT id::text, name, slug, coalesce(address, ''), opening_time, closing_time, created_at, updated_at
 		FROM branches
 		ORDER BY name
 	`)
@@ -95,6 +116,232 @@ func (p *Postgres) ListBranches(ctx context.Context) ([]domain.Branch, error) {
 	}
 
 	return branches, nil
+}
+
+func (p *Postgres) DeleteBranch(ctx context.Context, id string) (domain.Branch, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return domain.Branch{}, mapPostgresError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	branch, err := scanBranch(tx.QueryRow(ctx, `
+		SELECT id::text, name, slug, coalesce(address, ''), opening_time, closing_time, created_at, updated_at
+		FROM branches
+		WHERE id = $1
+	`, id))
+	if err != nil {
+		return domain.Branch{}, mapPostgresError(err)
+	}
+
+	statements := []string{
+		`UPDATE branches SET logo_file_id = NULL WHERE id = $1`,
+		`DELETE FROM notifications WHERE branch_id = $1 OR recipient_user_id IN (SELECT id FROM users WHERE branch_id = $1)`,
+		`DELETE FROM exam_results WHERE branch_id = $1`,
+		`DELETE FROM exam_participants WHERE branch_id = $1`,
+		`DELETE FROM exams WHERE branch_id = $1`,
+		`DELETE FROM assignments WHERE branch_id = $1`,
+		`DELETE FROM schedule_items WHERE branch_id = $1`,
+		`DELETE FROM class_students WHERE branch_id = $1`,
+		`DELETE FROM student_teacher_assignments WHERE branch_id = $1`,
+		`DELETE FROM payments WHERE branch_id = $1`,
+		`DELETE FROM salary_models WHERE branch_id = $1`,
+		`DELETE FROM staff_profiles WHERE branch_id = $1`,
+		`DELETE FROM classes WHERE branch_id = $1`,
+		`DELETE FROM course_score_categories WHERE branch_id = $1`,
+		`DELETE FROM teacher_course_specializations WHERE branch_id = $1`,
+		`DELETE FROM courses WHERE branch_id = $1`,
+		`DELETE FROM rooms WHERE branch_id = $1`,
+		`DELETE FROM students WHERE branch_id = $1`,
+		`DELETE FROM teachers WHERE branch_id = $1`,
+		`DELETE FROM files WHERE branch_id = $1`,
+		`DELETE FROM users WHERE branch_id = $1`,
+		`DELETE FROM outbox_events WHERE payload->>'branch_id' = $1 OR payload->'file'->>'branch_id' = $1`,
+		`DELETE FROM branches WHERE id = $1`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(ctx, statement, id); err != nil {
+			return domain.Branch{}, mapPostgresError(err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Branch{}, mapPostgresError(err)
+	}
+
+	return branch, nil
+}
+
+func (p *Postgres) CreateStaffMember(ctx context.Context, user domain.User, staff domain.StaffMember) (domain.StaffMember, error) {
+	user.Email = normalizeEmail(user.Email)
+	if user.BranchID == "" || user.Email == "" || user.PasswordHash == "" || user.FirstName == "" || user.LastName == "" {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	if user.Role != domain.RoleReceptionist {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	createdUser, err := scanUser(tx.QueryRow(ctx, `
+		INSERT INTO users (branch_id, role, email, password_hash, first_name, last_name, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, true)
+		RETURNING id::text, coalesce(branch_id::text, ''), role, email, password_hash, first_name, last_name, is_active, created_at, updated_at
+	`, user.BranchID, user.Role, user.Email, user.PasswordHash, strings.TrimSpace(user.FirstName), strings.TrimSpace(user.LastName)))
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	var staffID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO staff_profiles (branch_id, user_id, role, birth_date, phone, salary_amount_azn, profile_photo_file_id)
+		VALUES ($1, $2, $3, CASE WHEN $4 = '' THEN NULL ELSE to_date($4, 'DD/MM/YYYY') END, $5, $6, nullif($7, '')::uuid)
+		RETURNING id::text
+	`, createdUser.BranchID, createdUser.ID, domain.RoleReceptionist, strings.TrimSpace(staff.BirthDate), strings.TrimSpace(staff.Phone), staff.SalaryAmountAZN, strings.TrimSpace(staff.ProfilePhotoFileID)).Scan(&staffID)
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	created, err := p.staffMemberByIDTx(ctx, tx, staffID)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	return created, nil
+}
+
+func (p *Postgres) UpdateStaffMember(ctx context.Context, staff domain.StaffMember, passwordHash string) (domain.StaffMember, error) {
+	if staff.ID == "" || staff.FirstName == "" || staff.LastName == "" || staff.Email == "" || staff.SalaryAmountAZN < 0 {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	current, err := p.staffMemberByIDTx(ctx, tx, staff.ID)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE users
+		SET email = $2,
+			first_name = $3,
+			last_name = $4,
+			password_hash = CASE WHEN $5 = '' THEN password_hash ELSE $5 END,
+			updated_at = now()
+		WHERE id = $1
+	`, current.UserID, normalizeEmail(staff.Email), strings.TrimSpace(staff.FirstName), strings.TrimSpace(staff.LastName), strings.TrimSpace(passwordHash))
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE staff_profiles
+		SET birth_date = CASE WHEN $2 = '' THEN NULL ELSE to_date($2, 'DD/MM/YYYY') END,
+			phone = $3,
+			salary_amount_azn = $4,
+			profile_photo_file_id = nullif($5, '')::uuid,
+			updated_at = now()
+		WHERE id = $1
+	`, staff.ID, strings.TrimSpace(staff.BirthDate), strings.TrimSpace(staff.Phone), staff.SalaryAmountAZN, strings.TrimSpace(staff.ProfilePhotoFileID))
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	updated, err := p.staffMemberByIDTx(ctx, tx, staff.ID)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	return updated, nil
+}
+
+func (p *Postgres) DeleteStaffMember(ctx context.Context, id string) (domain.StaffMember, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	staff, err := p.staffMemberByIDTx(ctx, tx, id)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE staff_profiles SET profile_photo_file_id = NULL WHERE id = $1`, id); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM notifications WHERE recipient_user_id = $1`, staff.UserID); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staff_profiles WHERE id = $1`, id); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, staff.UserID); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	return staff, nil
+}
+
+func (p *Postgres) GetStaffMember(ctx context.Context, id string) (domain.StaffMember, error) {
+	row := p.pool.QueryRow(ctx, staffMemberSelect()+` WHERE sp.id = $1`, id)
+	staff, err := scanStaffMember(row)
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	return staff, nil
+}
+
+func (p *Postgres) ListStaffMembers(ctx context.Context, branchID string) ([]domain.StaffMember, error) {
+	rows, err := p.pool.Query(ctx, staffMemberSelect()+`
+		WHERE sp.branch_id = $1
+		ORDER BY u.last_name, u.first_name
+	`, branchID)
+	if err != nil {
+		return nil, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	staff := make([]domain.StaffMember, 0)
+	for rows.Next() {
+		member, err := scanStaffMember(rows)
+		if err != nil {
+			return nil, mapPostgresError(err)
+		}
+		staff = append(staff, member)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapPostgresError(err)
+	}
+
+	return staff, nil
+}
+
+func (p *Postgres) staffMemberByIDTx(ctx context.Context, tx pgx.Tx, id string) (domain.StaffMember, error) {
+	staff, err := scanStaffMember(tx.QueryRow(ctx, staffMemberSelect()+` WHERE sp.id = $1`, id))
+	if err != nil {
+		return domain.StaffMember{}, mapPostgresError(err)
+	}
+
+	return staff, nil
 }
 
 func (p *Postgres) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
@@ -504,7 +751,7 @@ func (p *Postgres) ListRooms(ctx context.Context, branchID string) ([]domain.Roo
 	rows, err := p.pool.Query(ctx, `
 		SELECT id::text, branch_id::text, name, capacity, is_active, created_at, updated_at
 		FROM rooms
-		WHERE ($1 = '' OR branch_id = $1::uuid)
+		WHERE is_active = true AND ($1 = '' OR branch_id = $1::uuid)
 		ORDER BY name
 	`, branchID)
 	if err != nil {
@@ -525,6 +772,37 @@ func (p *Postgres) ListRooms(ctx context.Context, branchID string) ([]domain.Roo
 	}
 
 	return rooms, nil
+}
+
+func (p *Postgres) GetRoom(ctx context.Context, id string) (domain.Room, error) {
+	row := p.pool.QueryRow(ctx, `
+		SELECT id::text, branch_id::text, name, capacity, is_active, created_at, updated_at
+		FROM rooms
+		WHERE id = $1
+	`, id)
+
+	room, err := scanRoom(row)
+	if err != nil {
+		return domain.Room{}, mapPostgresError(err)
+	}
+
+	return room, nil
+}
+
+func (p *Postgres) DeactivateRoom(ctx context.Context, id string) (domain.Room, error) {
+	row := p.pool.QueryRow(ctx, `
+		UPDATE rooms
+		SET is_active = false, updated_at = now()
+		WHERE id = $1
+		RETURNING id::text, branch_id::text, name, capacity, is_active, created_at, updated_at
+	`, id)
+
+	room, err := scanRoom(row)
+	if err != nil {
+		return domain.Room{}, mapPostgresError(err)
+	}
+
+	return room, nil
 }
 
 func (p *Postgres) CreateScheduleItem(ctx context.Context, item domain.ScheduleItem) (domain.ScheduleItem, error) {
@@ -830,7 +1108,7 @@ func (p *Postgres) ListFiles(ctx context.Context, branchID string) ([]domain.Fil
 			category, purpose, original_filename, mime_type, original_size_bytes, stored_size_bytes,
 			original_sha256, storage_bucket, storage_key, retention_until, deleted_at, created_at
 		FROM files
-		WHERE ($1 = '' OR branch_id = $1::uuid)
+		WHERE deleted_at IS NULL AND ($1 = '' OR branch_id = $1::uuid)
 		ORDER BY created_at DESC
 	`, branchID)
 	if err != nil {
@@ -927,7 +1205,7 @@ func (p *Postgres) roomBranch(ctx context.Context, roomID string) (string, error
 
 func scanBranch(row scanner) (domain.Branch, error) {
 	var branch domain.Branch
-	err := row.Scan(&branch.ID, &branch.Name, &branch.Slug, &branch.Address, &branch.CreatedAt, &branch.UpdatedAt)
+	err := row.Scan(&branch.ID, &branch.Name, &branch.Slug, &branch.Address, &branch.OpeningTime, &branch.ClosingTime, &branch.CreatedAt, &branch.UpdatedAt)
 	return branch, err
 }
 
@@ -935,6 +1213,37 @@ func scanUser(row scanner) (domain.User, error) {
 	var user domain.User
 	err := row.Scan(&user.ID, &user.BranchID, &user.Role, &user.Email, &user.PasswordHash, &user.FirstName, &user.LastName, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
 	return user, err
+}
+
+func staffMemberSelect() string {
+	return `
+		SELECT sp.id::text, sp.branch_id::text, sp.user_id::text, u.role, u.email,
+			u.first_name, u.last_name, coalesce(to_char(sp.birth_date, 'DD/MM/YYYY'), ''),
+			sp.phone, sp.salary_amount_azn, coalesce(sp.profile_photo_file_id::text, ''),
+			sp.created_at, sp.updated_at
+		FROM staff_profiles sp
+		JOIN users u ON u.id = sp.user_id
+	`
+}
+
+func scanStaffMember(row scanner) (domain.StaffMember, error) {
+	var staff domain.StaffMember
+	err := row.Scan(
+		&staff.ID,
+		&staff.BranchID,
+		&staff.UserID,
+		&staff.Role,
+		&staff.Email,
+		&staff.FirstName,
+		&staff.LastName,
+		&staff.BirthDate,
+		&staff.Phone,
+		&staff.SalaryAmountAZN,
+		&staff.ProfilePhotoFileID,
+		&staff.CreatedAt,
+		&staff.UpdatedAt,
+	)
+	return staff, err
 }
 
 func scanStudent(row scanner) (domain.Student, error) {

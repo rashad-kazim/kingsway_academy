@@ -21,6 +21,7 @@ type Memory struct {
 
 	users        map[string]domain.User
 	usersByEmail map[string]string
+	staffMembers map[string]domain.StaffMember
 
 	students      map[string]domain.Student
 	studentsByFIN map[string]string
@@ -50,6 +51,7 @@ func NewMemory() *Memory {
 		branchesBySlug:   make(map[string]string),
 		users:            make(map[string]domain.User),
 		usersByEmail:     make(map[string]string),
+		staffMembers:     make(map[string]domain.StaffMember),
 		students:         make(map[string]domain.Student),
 		studentsByFIN:    make(map[string]string),
 		teachers:         make(map[string]domain.Teacher),
@@ -135,6 +137,33 @@ func (m *Memory) GetBranch(_ context.Context, id string) (domain.Branch, error) 
 	return branch, nil
 }
 
+func (m *Memory) UpdateBranch(_ context.Context, branch domain.Branch) (domain.Branch, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, ok := m.branches[branch.ID]
+	if !ok {
+		return domain.Branch{}, domain.ErrNotFound
+	}
+	branch.Slug = normalizeSlug(branch.Slug)
+	if strings.TrimSpace(branch.Name) == "" || branch.Slug == "" {
+		return domain.Branch{}, domain.ErrInvalidInput
+	}
+	if existingID, exists := m.branchesBySlug[branch.Slug]; exists && existingID != branch.ID {
+		return domain.Branch{}, domain.ErrConflict
+	}
+
+	if current.Slug != branch.Slug {
+		delete(m.branchesBySlug, current.Slug)
+		m.branchesBySlug[branch.Slug] = branch.ID
+	}
+	branch.CreatedAt = current.CreatedAt
+	branch.UpdatedAt = now()
+	m.branches[branch.ID] = branch
+
+	return branch, nil
+}
+
 func (m *Memory) ListBranches(_ context.Context) ([]domain.Branch, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -146,6 +175,117 @@ func (m *Memory) ListBranches(_ context.Context) ([]domain.Branch, error) {
 	sort.Slice(branches, func(i, j int) bool { return branches[i].Name < branches[j].Name })
 
 	return branches, nil
+}
+
+func (m *Memory) DeleteBranch(_ context.Context, id string) (domain.Branch, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	branch, ok := m.branches[id]
+	if !ok {
+		return domain.Branch{}, domain.ErrNotFound
+	}
+
+	delete(m.branches, id)
+	delete(m.branchesBySlug, branch.Slug)
+
+	deletedUsers := make(map[string]struct{})
+	for userID, user := range m.users {
+		if user.BranchID == id {
+			deletedUsers[userID] = struct{}{}
+			delete(m.users, userID)
+			delete(m.usersByEmail, user.Email)
+		}
+	}
+	for staffID, staff := range m.staffMembers {
+		if staff.BranchID == id {
+			delete(m.staffMembers, staffID)
+		}
+	}
+	for studentID, student := range m.students {
+		if student.BranchID == id {
+			delete(m.students, studentID)
+			delete(m.studentsByFIN, student.FIN.String())
+		}
+	}
+	for teacherID, teacher := range m.teachers {
+		if teacher.BranchID == id {
+			delete(m.teachers, teacherID)
+			delete(m.teachersByUser, teacher.UserID)
+		}
+	}
+	for courseID, course := range m.courses {
+		if course.BranchID == id {
+			delete(m.courses, courseID)
+			delete(m.courseCategories, courseID)
+		}
+	}
+	for classID, class := range m.classes {
+		if class.BranchID == id {
+			delete(m.classes, classID)
+		}
+	}
+	for enrollmentID, enrollment := range m.classStudents {
+		if enrollment.BranchID == id {
+			delete(m.classStudents, enrollmentID)
+		}
+	}
+	for assignmentID, assignment := range m.assignments {
+		if assignment.BranchID == id {
+			delete(m.assignments, assignmentID)
+		}
+	}
+	for roomID, room := range m.rooms {
+		if room.BranchID == id {
+			delete(m.rooms, roomID)
+		}
+	}
+	for scheduleID, item := range m.schedules {
+		if item.BranchID == id {
+			delete(m.schedules, scheduleID)
+		}
+	}
+	for examID, exam := range m.exams {
+		if exam.BranchID == id {
+			delete(m.exams, examID)
+		}
+	}
+	for participantID, participant := range m.examParticipants {
+		if participant.BranchID == id {
+			delete(m.examParticipants, participantID)
+		}
+	}
+	for resultID, result := range m.examResults {
+		if result.BranchID == id {
+			delete(m.examResults, resultID)
+		}
+	}
+	for paymentID, payment := range m.payments {
+		if payment.BranchID == id {
+			delete(m.payments, paymentID)
+		}
+	}
+	for modelID, model := range m.salaryModels {
+		if model.BranchID == id {
+			delete(m.salaryModels, modelID)
+		}
+	}
+	for fileID, file := range m.files {
+		if file.BranchID == id {
+			delete(m.files, fileID)
+		}
+	}
+	for notificationID, notification := range m.notifications {
+		if notification.BranchID == id {
+			delete(m.notifications, notificationID)
+			continue
+		}
+		if _, ok := deletedUsers[notification.RecipientUserID]; ok {
+			delete(m.notifications, notificationID)
+		}
+	}
+
+	return branch, nil
 }
 
 func (m *Memory) CreateUser(_ context.Context, user domain.User) (domain.User, error) {
@@ -201,6 +341,133 @@ func (m *Memory) GetUserByEmail(_ context.Context, email string) (domain.User, e
 	}
 
 	return m.users[id], nil
+}
+
+func (m *Memory) CreateStaffMember(_ context.Context, user domain.User, staff domain.StaffMember) (domain.StaffMember, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	user.Email = normalizeEmail(user.Email)
+	if user.BranchID == "" || user.Email == "" || user.PasswordHash == "" || user.FirstName == "" || user.LastName == "" || user.Role != domain.RoleReceptionist {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
+	if _, ok := m.branches[user.BranchID]; !ok {
+		return domain.StaffMember{}, domain.ErrNotFound
+	}
+	if _, exists := m.usersByEmail[user.Email]; exists {
+		return domain.StaffMember{}, domain.ErrConflict
+	}
+
+	ts := now()
+	user.ID = newID()
+	user.CreatedAt = ts
+	user.UpdatedAt = ts
+	user.IsActive = true
+	m.users[user.ID] = user
+	m.usersByEmail[user.Email] = user.ID
+
+	staff.ID = newID()
+	staff.BranchID = user.BranchID
+	staff.UserID = user.ID
+	staff.Role = domain.RoleReceptionist
+	staff.Email = user.Email
+	staff.FirstName = user.FirstName
+	staff.LastName = user.LastName
+	staff.CreatedAt = ts
+	staff.UpdatedAt = ts
+	m.staffMembers[staff.ID] = staff
+
+	return staff, nil
+}
+
+func (m *Memory) UpdateStaffMember(_ context.Context, staff domain.StaffMember, passwordHash string) (domain.StaffMember, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, ok := m.staffMembers[staff.ID]
+	if !ok {
+		return domain.StaffMember{}, domain.ErrNotFound
+	}
+	user, ok := m.users[current.UserID]
+	if !ok {
+		return domain.StaffMember{}, domain.ErrNotFound
+	}
+	email := normalizeEmail(staff.Email)
+	if existingID, exists := m.usersByEmail[email]; exists && existingID != user.ID {
+		return domain.StaffMember{}, domain.ErrConflict
+	}
+
+	delete(m.usersByEmail, user.Email)
+	user.Email = email
+	user.FirstName = strings.TrimSpace(staff.FirstName)
+	user.LastName = strings.TrimSpace(staff.LastName)
+	if strings.TrimSpace(passwordHash) != "" {
+		user.PasswordHash = strings.TrimSpace(passwordHash)
+	}
+	user.UpdatedAt = now()
+	m.users[user.ID] = user
+	m.usersByEmail[user.Email] = user.ID
+
+	staff.BranchID = current.BranchID
+	staff.UserID = current.UserID
+	staff.Role = domain.RoleReceptionist
+	staff.Email = user.Email
+	staff.FirstName = user.FirstName
+	staff.LastName = user.LastName
+	staff.CreatedAt = current.CreatedAt
+	staff.UpdatedAt = now()
+	m.staffMembers[staff.ID] = staff
+
+	return staff, nil
+}
+
+func (m *Memory) DeleteStaffMember(_ context.Context, id string) (domain.StaffMember, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	staff, ok := m.staffMembers[id]
+	if !ok {
+		return domain.StaffMember{}, domain.ErrNotFound
+	}
+	delete(m.staffMembers, id)
+	if user, ok := m.users[staff.UserID]; ok {
+		delete(m.usersByEmail, user.Email)
+		delete(m.users, staff.UserID)
+	}
+
+	return staff, nil
+}
+
+func (m *Memory) GetStaffMember(_ context.Context, id string) (domain.StaffMember, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	staff, ok := m.staffMembers[id]
+	if !ok {
+		return domain.StaffMember{}, domain.ErrNotFound
+	}
+
+	return staff, nil
+}
+
+func (m *Memory) ListStaffMembers(_ context.Context, branchID string) ([]domain.StaffMember, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	staff := make([]domain.StaffMember, 0)
+	for _, member := range m.staffMembers {
+		if member.BranchID == branchID {
+			staff = append(staff, member)
+		}
+	}
+	sort.Slice(staff, func(i, j int) bool {
+		if staff[i].LastName == staff[j].LastName {
+			return staff[i].FirstName < staff[j].FirstName
+		}
+		return staff[i].LastName < staff[j].LastName
+	})
+
+	return staff, nil
 }
 
 func (m *Memory) CreateStudent(_ context.Context, student domain.Student) (domain.Student, error) {
@@ -500,13 +767,40 @@ func (m *Memory) ListRooms(_ context.Context, branchID string) ([]domain.Room, e
 
 	rooms := make([]domain.Room, 0)
 	for _, room := range m.rooms {
-		if branchID == "" || room.BranchID == branchID {
+		if room.IsActive && (branchID == "" || room.BranchID == branchID) {
 			rooms = append(rooms, room)
 		}
 	}
 	sort.Slice(rooms, func(i, j int) bool { return rooms[i].Name < rooms[j].Name })
 
 	return rooms, nil
+}
+
+func (m *Memory) GetRoom(_ context.Context, id string) (domain.Room, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	room, ok := m.rooms[id]
+	if !ok {
+		return domain.Room{}, domain.ErrNotFound
+	}
+
+	return room, nil
+}
+
+func (m *Memory) DeactivateRoom(_ context.Context, id string) (domain.Room, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	room, ok := m.rooms[id]
+	if !ok {
+		return domain.Room{}, domain.ErrNotFound
+	}
+	room.IsActive = false
+	room.UpdatedAt = now()
+	m.rooms[id] = room
+
+	return room, nil
 }
 
 func (m *Memory) CreateScheduleItem(_ context.Context, item domain.ScheduleItem) (domain.ScheduleItem, error) {
@@ -698,7 +992,7 @@ func (m *Memory) ListFiles(_ context.Context, branchID string) ([]domain.FileObj
 
 	files := make([]domain.FileObject, 0)
 	for _, file := range m.files {
-		if branchID == "" || file.BranchID == branchID {
+		if file.DeletedAt == nil && (branchID == "" || file.BranchID == branchID) {
 			files = append(files, file)
 		}
 	}

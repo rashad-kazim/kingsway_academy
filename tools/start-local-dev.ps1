@@ -8,6 +8,8 @@ $FrontendLog = Join-Path $RuntimeDir "frontend.out.log"
 $FrontendErr = Join-Path $RuntimeDir "frontend.err.log"
 $BackendLog = Join-Path $RuntimeDir "backend.out.log"
 $BackendErr = Join-Path $RuntimeDir "backend.err.log"
+$BackendWatchLog = Join-Path $RuntimeDir "backend-watch.out.log"
+$BackendWatchErr = Join-Path $RuntimeDir "backend-watch.err.log"
 $PostgresLog = Join-Path $RuntimeDir "postgres.log"
 $RedisLog = Join-Path $RuntimeDir "redis.out.log"
 $RedisErr = Join-Path $RuntimeDir "redis.err.log"
@@ -17,6 +19,8 @@ $MinioLog = Join-Path $RuntimeDir "minio.out.log"
 $MinioErr = Join-Path $RuntimeDir "minio.err.log"
 $FrontendPid = Join-Path $RuntimeDir "frontend.pid"
 $BackendPid = Join-Path $RuntimeDir "backend.pid"
+$BackendWatchPid = Join-Path $RuntimeDir "backend-watch.pid"
+$BackendExe = Join-Path $RuntimeDir "backend-api-server.exe"
 $PostgresData = Join-Path $RuntimeDir "postgres-data"
 $RedisData = Join-Path $RuntimeDir "redis-data"
 $RabbitBase = Join-Path $RuntimeDir "rabbitmq"
@@ -51,6 +55,99 @@ function Wait-Port {
     Start-Sleep -Milliseconds 500
   }
   return $false
+}
+
+function Wait-PortClosed {
+  param([int]$Port, [int]$Seconds = 15)
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  while ((Get-Date) -lt $deadline) {
+    if (-not (Test-Port $Port)) {
+      return $true
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  return $false
+}
+
+function Get-BackendSourceStamp {
+  $files = Get-ChildItem -LiteralPath $BackendDir -Recurse -File -Include *.go,*.sql,go.mod,go.sum -ErrorAction SilentlyContinue
+  $latest = $files | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+  if ($null -eq $latest) {
+    return [datetime]::MinValue
+  }
+  return $latest.LastWriteTimeUtc
+}
+
+function Stop-BackendIfOwned {
+  $owner = Get-PortOwner 8080
+  if ($null -eq $owner) {
+    return
+  }
+
+  $pidFromFile = $null
+  if (Test-Path $BackendPid) {
+    $rawPid = (Get-Content -LiteralPath $BackendPid -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace($rawPid)) {
+      $pidFromFile = [int]$rawPid
+    }
+  }
+  $process = Get-Process -Id $owner -ErrorAction SilentlyContinue
+  $path = $null
+  if ($null -ne $process) {
+    try {
+      $path = $process.Path
+    } catch {
+      $path = $null
+    }
+  }
+
+  $ownedByRuntime = ($null -ne $pidFromFile -and $owner -eq $pidFromFile) -or ($path -eq $BackendExe)
+  if (-not $ownedByRuntime) {
+    throw "Backend source changed, but port 8080 is owned by another process ($owner). Stop that process manually, then run start-kingsway.cmd again."
+  }
+
+  Write-Host "Restarting backend because source files changed..."
+  Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
+  if (-not (Wait-PortClosed 8080 15)) {
+    throw "Backend process on 8080 did not stop cleanly."
+  }
+}
+
+function Start-BackendWatcher {
+  $pidFromFile = $null
+  if (Test-Path $BackendWatchPid) {
+    $rawPid = (Get-Content -LiteralPath $BackendWatchPid -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace($rawPid)) {
+      $pidFromFile = [int]$rawPid
+    }
+  }
+  if ($null -ne $pidFromFile) {
+    $existing = Get-Process -Id $pidFromFile -ErrorAction SilentlyContinue
+    if ($null -ne $existing) {
+      Write-Host "Backend watcher already running."
+      return
+    }
+  }
+
+  $powershell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+  if ($null -eq $powershell) {
+    $powershell = Get-Command powershell -ErrorAction SilentlyContinue
+  }
+  if ($null -eq $powershell) {
+    throw "powershell was not found; backend watcher cannot start."
+  }
+
+  Remove-Item -LiteralPath $BackendWatchLog, $BackendWatchErr -Force -ErrorAction SilentlyContinue
+  $watcher = Start-Process `
+    -FilePath $powershell.Source `
+    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "watch-backend.ps1")) `
+    -WorkingDirectory $Root `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $BackendWatchLog `
+    -RedirectStandardError $BackendWatchErr `
+    -PassThru
+  Set-Content -LiteralPath $BackendWatchPid -Value $watcher.Id -Encoding ASCII
+  Write-Host "Backend watcher running."
 }
 
 function Ensure-File {
@@ -346,16 +443,33 @@ Start-Redis
 Start-Minio
 Start-RabbitMQ
 
-if (-not (Test-Port 8080)) {
+$backendSourceStamp = Get-BackendSourceStamp
+$backendExeStamp = if (Test-Path $BackendExe) { (Get-Item -LiteralPath $BackendExe).LastWriteTimeUtc } else { [datetime]::MinValue }
+$backendNeedsStart = -not (Test-Port 8080)
+$backendNeedsRebuild = $backendSourceStamp -gt $backendExeStamp
+
+if ((Test-Port 8080) -and $backendNeedsRebuild) {
+  Stop-BackendIfOwned
+  $backendNeedsStart = $true
+}
+
+if ($backendNeedsStart) {
   $go = Get-Command go -ErrorAction SilentlyContinue
   if ($null -eq $go) {
     throw "go was not found. Install Go or add it to PATH."
   }
 
+  Write-Host "Building backend..."
+  Push-Location $BackendDir
+  try {
+    Invoke-Checked { & $go.Source "build" "-o" $BackendExe "./cmd/api-server" } "Backend build failed."
+  } finally {
+    Pop-Location
+  }
+
   Remove-Item -LiteralPath $BackendLog, $BackendErr -Force -ErrorAction SilentlyContinue
   $backend = Start-Process `
-    -FilePath $go.Source `
-    -ArgumentList @("run", "./cmd/api-server") `
+    -FilePath $BackendExe `
     -WorkingDirectory $BackendDir `
     -WindowStyle Hidden `
     -RedirectStandardOutput $BackendLog `
@@ -378,6 +492,7 @@ if (-not (Test-Port 8080)) {
 }
 
 Ensure-DefaultOwner
+Start-BackendWatcher
 
 if (-not (Test-Port 3000)) {
   Remove-Item -LiteralPath $FrontendLog, $FrontendErr -Force -ErrorAction SilentlyContinue
@@ -414,3 +529,5 @@ Write-Host "  $FrontendLog"
 Write-Host "  $FrontendErr"
 Write-Host "  $BackendLog"
 Write-Host "  $BackendErr"
+Write-Host "  $BackendWatchLog"
+Write-Host "  $BackendWatchErr"

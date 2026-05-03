@@ -1,169 +1,431 @@
+"use client";
+
+import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
+  ArrowLeftRight,
+  BadgeDollarSign,
   Bell,
   Building2,
   CalendarDays,
+  CalendarCheck,
   CreditCard,
   Files,
+  Gauge,
   GraduationCap,
-  LayoutDashboard,
-  LogOut,
   ShieldCheck,
+  UserCog,
   UserRound,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import type { Session } from "@/lib/api/types";
-import { logoutAction } from "@/lib/auth/actions";
-import { dashboardPathForRole, roleLabel } from "@/lib/navigation/roles";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  TopbarControls,
+  type ChromeLabels,
+} from "@/components/layout/topbar-controls";
+import type { Branch, Role, Session } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
+import { dashboardPathForRole } from "@/lib/navigation/roles";
+import { useDevAssetSrc } from "@/lib/use-dev-asset-src";
+
+type NavLabelKey =
+  | "globalDashboard"
+  | "branchManagement"
+  | "teacherFinanceHr"
+  | "receptionistManagement"
+  | "studentManagement"
+  | "schedulingRooms"
+  | "assignmentSwap"
+  | "paymentHub"
+  | "eventsExams"
+  | "students"
+  | "reception"
+  | "classes"
+  | "progress"
+  | "schedule"
+  | "finance"
+  | "files"
+  | "alerts";
+
+export type AppShellLabels = {
+  common: ChromeLabels;
+  shell: {
+    openSidebar: string;
+    closeSidebar: string;
+    footer: string;
+    navigation: Record<NavLabelKey, string>;
+  };
+};
 
 type AppShellProps = {
-  children: React.ReactNode;
+  children: ReactNode;
+  labels: AppShellLabels;
   locale: string;
+  selectedBranch?: Branch;
   session: Session;
 };
 
-const navigation = [
-  { href: "/dashboard/owner", label: "Owner", icon: ShieldCheck, roles: ["owner"] },
+type NavItem = {
+  href: string;
+  icon: LucideIcon;
+  labelKey: NavLabelKey;
+  roles: Role[];
+};
+
+const navigation: NavItem[] = [
   {
-    href: "/dashboard/receptionist",
-    label: "Reception",
-    icon: LayoutDashboard,
+    href: "/dashboard/owner",
+    labelKey: "globalDashboard",
+    icon: Gauge,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "branchManagement",
+    icon: Building2,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "teacherFinanceHr",
+    icon: BadgeDollarSign,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "receptionistManagement",
+    icon: UserCog,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "studentManagement",
+    icon: Users,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "schedulingRooms",
+    icon: CalendarDays,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "assignmentSwap",
+    icon: ArrowLeftRight,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "paymentHub",
+    icon: CreditCard,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "eventsExams",
+    icon: CalendarCheck,
+    roles: ["owner"],
+  },
+  {
+    href: "/dashboard/owner",
+    labelKey: "students",
+    icon: Users,
     roles: ["receptionist"],
   },
-  { href: "/dashboard/teacher", label: "Classes", icon: GraduationCap, roles: ["teacher"] },
-  { href: "/dashboard/student", label: "Progress", icon: UserRound, roles: ["student"] },
+  {
+    href: "/dashboard/receptionist",
+    labelKey: "reception",
+    icon: ShieldCheck,
+    roles: ["receptionist"],
+  },
+  {
+    href: "/dashboard/teacher",
+    labelKey: "classes",
+    icon: GraduationCap,
+    roles: ["teacher"],
+  },
+  {
+    href: "/dashboard/student",
+    labelKey: "progress",
+    icon: UserRound,
+    roles: ["student"],
+  },
   {
     href: "/dashboard",
-    label: "Schedule",
+    labelKey: "schedule",
     icon: CalendarDays,
-    roles: ["owner", "receptionist", "teacher", "student"],
+    roles: ["receptionist", "teacher", "student"],
   },
   {
     href: "/dashboard",
-    label: "Finance",
+    labelKey: "finance",
     icon: CreditCard,
-    roles: ["owner", "receptionist", "student"],
+    roles: ["receptionist", "student"],
   },
   {
     href: "/dashboard",
-    label: "Files",
+    labelKey: "files",
     icon: Files,
-    roles: ["owner", "receptionist", "teacher"],
+    roles: ["receptionist", "teacher"],
   },
   {
     href: "/dashboard",
-    label: "Alerts",
+    labelKey: "alerts",
     icon: Bell,
-    roles: ["owner", "receptionist", "teacher", "student"],
+    roles: ["receptionist", "teacher", "student"],
   },
-] as const;
+];
 
-export function AppShell({ children, locale, session }: AppShellProps) {
-  const userName = `${session.user.first_name} ${session.user.last_name}`;
+export function AppShell({
+  children,
+  labels,
+  locale,
+  selectedBranch,
+  session,
+}: AppShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [labelsReady, setLabelsReady] = useState(true);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const logoSrc = useDevAssetSrc("/images/kingsway-mark.png");
   const roleHome = dashboardPathForRole(session.user.role);
+  const homeHref = selectedBranch
+    ? `/${locale}${roleHome}?branch_id=${selectedBranch.id}`
+    : `/${locale}${roleHome}`;
+  const userName = `${session.user.first_name} ${session.user.last_name}`;
+
+  const visibleNavigation = useMemo(
+    () => navigation.filter((item) => item.roles.includes(session.user.role)),
+    [session.user.role],
+  );
+
+  function toggleSidebar() {
+    setLabelsReady(false);
+    setSidebarOpen((current) => !current);
+    window.setTimeout(() => setLabelsReady(true), 280);
+  }
+
+  function isNavigationActive(item: NavItem, href: string) {
+    const activeBranchID = selectedBranch?.id ?? searchParams.get("branch_id");
+    const activeView = searchParams.get("view");
+
+    if (item.labelKey === "globalDashboard") {
+      return (
+        pathname === `/${locale}${href}` &&
+        Boolean(activeBranchID) &&
+        activeView !== "branches"
+      );
+    }
+
+    if (item.labelKey === "branchManagement") {
+      return pathname === `/${locale}/dashboard/owner` && activeView === "branches";
+    }
+
+    return false;
+  }
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
-        <div className="flex h-14 items-center gap-2 px-4">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Building2 className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">Kingsway</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {session.branch?.name ?? roleLabel(session.user.role)}
+    <div className="h-svh overflow-hidden bg-[#f7f8fb] text-[#0a284b] transition-colors dark:bg-[#0b1622] dark:text-[#f3f6fa]">
+      <header className="fixed inset-x-0 top-0 z-[1000] flex h-20 items-center justify-between border-b border-transparent bg-[#0a284b] px-6 text-white shadow-sm dark:border-[#293445] dark:bg-[#121f2d] dark:text-[#f3f6fa]">
+        <div className="flex w-72 items-center gap-3">
+          <Button
+            aria-label={
+              sidebarOpen ? labels.shell.closeSidebar : labels.shell.openSidebar
+            }
+            className="relative h-9 w-11 overflow-hidden rounded-md text-white hover:bg-white/10 hover:text-white dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]"
+            size="icon"
+            type="button"
+            variant="ghost"
+            onClick={toggleSidebar}
+          >
+            <HamburgerMorph open={sidebarOpen} />
+          </Button>
+        </div>
+
+        <Link
+          className="absolute left-1/2 flex -translate-x-1/2 cursor-pointer items-center gap-3 text-white dark:text-[#f3f6fa]"
+          href={homeHref}
+        >
+          <Image
+            src={logoSrc}
+            alt={labels.common.brand}
+            width={501}
+            height={499}
+            priority
+            unoptimized={process.env.NODE_ENV === "development"}
+            className="size-12 object-contain drop-shadow-[0_1px_3px_rgba(255,255,255,0.35)]"
+          />
+          <div className="leading-[0.92]">
+            <div className="text-[18px] font-black uppercase tracking-[0.14em] text-white">
+              {labels.common.brand}
+            </div>
+            <div className="mt-1 text-[12px] font-black uppercase tracking-[0.36em] text-[#ff3b4f]">
+              {labels.common.academy}
             </div>
           </div>
-        </div>
-        <Separator />
-        <nav className="flex flex-1 flex-col gap-1 p-3">
-          {navigation
-            .filter((item) =>
-              (item.roles as readonly string[]).includes(session.user.role),
-            )
-            .map((item) => {
-              const Icon = item.icon;
+        </Link>
+
+        <TopbarControls
+          labels={labels.common}
+          locale={locale}
+          role={session.user.role}
+          userName={userName}
+        />
+      </header>
+
+      <aside
+        className={cn(
+          "fixed bottom-0 left-0 top-0 z-[999] border-r border-[#dce3ee] bg-[#0a284b] pt-20 text-white transition-all duration-300 ease-in-out dark:border-[#293445] dark:bg-[#121f2d] dark:text-[#f3f6fa]",
+          sidebarOpen ? "w-80" : "w-20",
+        )}
+      >
+        <div className="flex h-full flex-col">
+          <nav className="flex flex-1 flex-col gap-1 p-3 pt-5">
+            {visibleNavigation.map((item) => {
               const href = item.href === "/dashboard" ? roleHome : item.href;
+              const selectedBranchID = selectedBranch?.id;
+              const shouldScopeToBranch =
+                Boolean(selectedBranchID) &&
+                item.labelKey !== "branchManagement";
+              const fullHref =
+                item.labelKey === "globalDashboard" &&
+                session.user.role === "owner"
+                  ? `/${locale}${href}?branch_id=${selectedBranchID ?? "all"}`
+                  : item.labelKey === "branchManagement" &&
+                      session.user.role === "owner"
+                    ? `/${locale}${href}?view=branches`
+                  : shouldScopeToBranch
+                    ? `/${locale}${href}?branch_id=${selectedBranchID}`
+                    : `/${locale}${href}`;
               return (
-                <Button
-                  key={`${item.label}-${href}`}
-                  asChild
-                  variant="ghost"
-                  className="justify-start"
-                >
-                  <Link href={`/${locale}${href}`}>
-                    <Icon />
-                    {item.label}
-                  </Link>
-                </Button>
+                <SidebarLink
+                  active={isNavigationActive(item, href)}
+                  key={`${item.labelKey}-${href}`}
+                  href={fullHref}
+                  icon={item.icon}
+                  label={labels.shell.navigation[item.labelKey]}
+                  labelsReady={labelsReady}
+                  open={sidebarOpen}
+                />
               );
             })}
-        </nav>
-        <div className="space-y-3 border-t p-4">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{userName}</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {session.user.email}
-            </div>
-          </div>
-          <form action={logoutAction}>
-            <input name="locale" type="hidden" value={locale} />
-            <Button className="w-full justify-start" type="submit" variant="outline">
-              <LogOut />
-              Sign out
-            </Button>
-          </form>
+          </nav>
         </div>
       </aside>
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur lg:px-6">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">Kingsway</div>
-            <div className="truncate text-xs text-muted-foreground lg:hidden">
-              {session.branch?.name ?? roleLabel(session.user.role)}
-            </div>
+      <div
+        className={cn(
+          "fixed bottom-0 right-0 top-20 transition-all duration-300 ease-in-out",
+          sidebarOpen ? "left-80" : "left-20",
+        )}
+      >
+        <div className="h-full overflow-y-auto">
+          <div className="flex min-h-full flex-col">
+            <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+              {children}
+            </main>
+            <footer className="w-full border-t border-[#dce3ee] bg-white/55 px-6 py-4 dark:border-[#293445] dark:bg-[#121f2d]/55">
+              <div className="flex w-full flex-wrap items-center justify-between gap-3 text-xs text-[#687386] dark:text-[#6f7a8a]">
+                <span className="font-semibold">{labels.shell.footer}</span>
+                <span>&copy; 2026 Kingsway Academy. Internal operation system.</span>
+              </div>
+            </footer>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{roleLabel(session.user.role)}</Badge>
-            <form action={logoutAction} className="lg:hidden">
-              <input name="locale" type="hidden" value={locale} />
-              <Button size="icon" type="submit" variant="ghost" aria-label="Sign out">
-                <LogOut />
-              </Button>
-            </form>
-          </div>
-        </header>
-        <nav className="flex gap-2 overflow-x-auto border-b p-2 lg:hidden">
-          {navigation
-            .filter((item) =>
-              (item.roles as readonly string[]).includes(session.user.role),
-            )
-            .map((item) => {
-              const Icon = item.icon;
-              const href = item.href === "/dashboard" ? roleHome : item.href;
-              return (
-                <Button
-                  key={`mobile-${item.label}-${href}`}
-                  asChild
-                  size="sm"
-                  variant="ghost"
-                >
-                  <Link href={`/${locale}${href}`}>
-                    <Icon />
-                    {item.label}
-                  </Link>
-                </Button>
-              );
-            })}
-        </nav>
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 lg:p-6">
-          {children}
-        </main>
+        </div>
       </div>
     </div>
+  );
+}
+
+function HamburgerMorph({ open }: { open: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative block h-5 w-7 text-current"
+    >
+      <span
+        className={cn(
+          "absolute left-[10px] top-0 h-0.5 w-[17px] rounded-full bg-current transition-all duration-300 ease-in-out",
+          open && "left-[3px] top-[9px] w-[22px] rotate-45",
+        )}
+      />
+      <span
+        className={cn(
+          "absolute left-0 top-[9px] h-0.5 w-7 rounded-full bg-current transition-all duration-300 ease-in-out",
+          open && "opacity-0",
+        )}
+      />
+      <span
+        className={cn(
+          "absolute left-0 top-[18px] h-0.5 w-[15px] rounded-full bg-current transition-all duration-300 ease-in-out",
+          open && "left-[3px] top-[9px] w-[22px] -rotate-45",
+        )}
+      />
+    </span>
+  );
+}
+
+function SidebarLink({
+  active,
+  href,
+  icon: Icon,
+  label,
+  labelsReady,
+  open,
+}: {
+  active: boolean;
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  labelsReady: boolean;
+  open: boolean;
+}) {
+  const showLabel = open && labelsReady;
+  const content = (
+    <Link
+      className={cn(
+        "relative flex h-12 cursor-pointer items-center gap-3 overflow-hidden rounded-md px-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/10 hover:text-white dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]",
+        active &&
+          "bg-[#306186] text-white before:absolute before:left-0 before:top-2 before:h-8 before:w-1 before:rounded-r-full before:bg-[#ff3b4f] dark:bg-[#306186]",
+      )}
+      href={href}
+    >
+      <span className="flex w-10 shrink-0 items-center justify-center">
+        <Icon className="size-[22px] shrink-0" />
+      </span>
+      <span
+        className={cn(
+          "whitespace-nowrap transition-[opacity,transform] duration-150",
+          showLabel
+            ? "translate-x-0 opacity-100"
+            : "pointer-events-none -translate-x-1 opacity-0",
+        )}
+      >
+        {label}
+      </span>
+    </Link>
+  );
+
+  if (open) {
+    return content;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={10}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
