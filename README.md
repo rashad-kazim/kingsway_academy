@@ -54,6 +54,34 @@ cd frontend
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
+## Local Check Modes
+
+For tiny visual/text-only edits, do not automatically run a check unless the user asks for it.
+
+Use the lightweight check when a quick confidence check is explicitly needed:
+
+```bash
+check-kingsway.cmd
+```
+
+This runs in `quick` mode by default. It checks whitespace, then only runs affected backend package tests/build and frontend lint when those areas changed. It does not start the app, run Next build, PostgreSQL integration tests, or Playwright E2E.
+
+Use the medium check before handing off a larger local change:
+
+```bash
+check-kingsway.cmd -Mode standard
+```
+
+This now runs as a step ladder: quick phase first, then only the standard additions that did not already pass in quick. It still skips frontend production build, app startup, PostgreSQL integration tests, and E2E.
+
+Use the full regression gate only after finishing a full menu/module, before a major handoff, or when specifically debugging regressions:
+
+```bash
+check-kingsway.cmd -Mode full
+```
+
+This now runs as a step ladder: quick phase, then standard additions, then only full additions. The full additions are frontend production build, app health, PostgreSQL integration tests, and Owner Playwright smoke tests. Detailed logs are written under `.runtime/check-kingsway.log`; the terminal should stay short unless something fails.
+
 ## Docker Full-Stack Run
 
 Docker is parked until the user explicitly re-enables it. Do not run `docker compose` for local startup or frontend iteration in the current workflow.
@@ -90,6 +118,7 @@ Only use Docker again after explicit instruction.
   - `special` / "Cok onemli dosya": official or critical files. Visible/content data must not be altered. PDFs may have non-content metadata removed; JPG/PNG/WebP special images should not be recompressed or quality-ratio converted. At-rest encryption is required in the target architecture.
   - `standard` + `profile_photo`: UI-only display image. It is optimized for storage/display and is not designed to recreate the original file on download.
   - Writing exam documents are retained for 60 days; scores remain permanent.
+- Regression policy: whenever a menu/module is considered fully complete, ask the user whether to add or extend full E2E coverage for that module before moving to the next module.
 
 ## File Architecture Decisions
 
@@ -866,6 +895,19 @@ Only use Docker again after explicit instruction.
   - The Owner smoke test logs in as the default local owner, creates a temporary branch, verifies Branch Detail Save, creates and edits a teacher, creates a student, checks Student & Assignment Hub, and then deletes the temporary branch.
   - Added `frontend/test-results/` and `frontend/playwright-report/` to `.gitignore`.
   - Verification passed with Docker disabled: `.\check-kingsway.cmd` completed successfully.
+- 2026-05-07 Root Playwright cleanup:
+  - Removed the accidental root-level Playwright initialization created by `npm init playwright@latest`: root `node_modules/`, `tests/`, `.github/`, `package.json`, `package-lock.json`, and `playwright.config.ts`.
+  - Kept the real project Playwright setup under `frontend/`: `frontend/playwright.config.ts`, `frontend/e2e/`, `frontend/package.json`, `frontend/package-lock.json`, and `frontend/node_modules/`.
+  - Reverted the accidental root `.gitignore` additions from the Playwright initializer.
+  - Verification passed with Docker disabled: `.\check-kingsway.cmd -SkipE2E`.
+- 2026-05-07 Regression check load reduction:
+  - Changed `check-kingsway.cmd` to default to lightweight `quick` mode so routine checks no longer start the full app or run Playwright E2E.
+  - Added `-Mode standard` for backend unit/build + frontend lint + whitespace, and `-Mode full` for the existing heavy build/integration/E2E gate.
+  - The intended workflow is quick checks during normal edits, standard before larger handoff, and full only after completing a full module/menu or when chasing a regression.
+- 2026-05-07 Regression check ladder:
+  - Updated `check-kingsway.cmd -Mode standard` and `-Mode full` to run as a ladder: quick phase first, then standard-only additions, then full-only additions.
+  - Repeated exact checks are skipped when already completed in an earlier phase, such as backend build or frontend lint.
+  - New working rule: for tiny changes, do not run even quick checks automatically; run checks only when the change is risky, larger, explicitly requested, or before handoff.
 
 ## Next Steps
 

@@ -974,7 +974,10 @@ function BranchDetailPage({
           />
           <div className="flex flex-col items-center gap-4">
             {addRoomOpen ? (
-              <div className="w-full max-w-2xl rounded-xl border border-[#dce3ee] bg-[#f8fafc] p-4 shadow-sm dark:border-[#3a4658] dark:bg-[#202b3a]">
+              <div
+                className="w-full max-w-2xl rounded-xl border border-[#dce3ee] bg-[#f8fafc] p-4 shadow-sm dark:border-[#3a4658] dark:bg-[#202b3a]"
+                data-testid="room-editor"
+              >
                 <div className="grid gap-3 md:grid-cols-[1fr_140px]">
                   <div className="relative">
                     <Input
@@ -2159,7 +2162,10 @@ function RoomRow({
   removeLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-[#dce3ee] bg-[#f8fafc] px-4 py-3 dark:border-[#3a4658] dark:bg-[#202b3a]">
+    <div
+      className="flex items-center justify-between gap-3 rounded-lg border border-[#dce3ee] bg-[#f8fafc] px-4 py-3 dark:border-[#3a4658] dark:bg-[#202b3a]"
+      data-testid="room-row"
+    >
       <div>
         <div className="font-bold">{name}</div>
         <div className="text-xs font-semibold text-[#687386] dark:text-[#6f7a8a]">

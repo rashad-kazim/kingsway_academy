@@ -463,6 +463,7 @@ function ReceptionistLine({
           animate={
             shellMinHeight ? { minHeight: shellMinHeight } : undefined
           }
+          data-testid="receptionist-row"
           ref={shellRef}
           transition={shellTransition}
         >
@@ -968,7 +969,7 @@ function StaffEditor({
   }
 
   const content = (
-    <div className="space-y-5">
+    <div className="space-y-5" data-testid={`staff-editor-${mode}`}>
       {!embedded ? (
         <h2 className="text-xl font-black">
           {mode === "edit" ? labels.editStaff : labels.addStaff}
@@ -1027,6 +1028,7 @@ function StaffEditor({
           <Field label={labels.name} required reveal={embedded && !layoutIDs?.name}>
             <Input
               className="h-11"
+              data-testid="staff-first-name"
               value={values.firstName}
               onChange={(event) => updateValue("firstName", event.target.value)}
             />
@@ -1034,6 +1036,7 @@ function StaffEditor({
           <Field label={labels.surname} required reveal={embedded && !layoutIDs?.name}>
             <Input
               className="h-11"
+              data-testid="staff-last-name"
               value={values.lastName}
               onChange={(event) => updateValue("lastName", event.target.value)}
             />
@@ -1047,6 +1050,7 @@ function StaffEditor({
         >
           <select
             className={selectClassName}
+            data-testid="staff-branch-id"
             value={values.branchID}
             onChange={(event) => updateValue("branchID", event.target.value)}
           >
@@ -1065,6 +1069,7 @@ function StaffEditor({
         >
           <Input
             className="h-11"
+            data-testid="staff-birth-date"
             placeholder="DD/MM/YYYY"
             value={values.birthDate}
             onChange={(event) =>
@@ -1079,6 +1084,7 @@ function StaffEditor({
         >
           <select
             className={selectClassName}
+            data-testid="staff-gender"
             value={values.gender}
             onChange={(event) =>
               updateValue("gender", event.target.value as StaffGender)
@@ -1097,6 +1103,7 @@ function StaffEditor({
         >
           <select
             className={selectClassName}
+            data-testid="staff-status"
             value={values.isActive ? "active" : "inactive"}
             onChange={(event) =>
               updateValue("isActive", event.target.value === "active")
@@ -1127,6 +1134,7 @@ function StaffEditor({
             <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7e8ea5]" />
             <Input
               className="h-11 pl-10"
+              data-testid="staff-phone"
               value={values.phone}
               onChange={(event) => updateValue("phone", event.target.value)}
             />
@@ -1139,6 +1147,7 @@ function StaffEditor({
         >
           <Textarea
             className="h-11 min-h-11 resize-none py-2"
+            data-testid="staff-address"
             value={values.address}
             onChange={(event) => updateValue("address", event.target.value)}
           />
@@ -1155,6 +1164,7 @@ function StaffEditor({
             </span>
             <Input
               className="h-11 pl-10"
+              data-testid="staff-salary"
               inputMode="numeric"
               value={values.salary}
               onChange={(event) =>
@@ -1171,6 +1181,7 @@ function StaffEditor({
         >
           <Input
             className="h-11"
+            data-testid="staff-hired-at"
             placeholder="DD/MM/YYYY"
             value={values.hiredAt}
             onChange={(event) =>
@@ -1197,6 +1208,7 @@ function StaffEditor({
                 emailStatus === "taken" &&
                   "border-[#ef2334] dark:border-[#ff3b4f]",
               )}
+              data-testid="staff-email"
               value={values.email}
               onChange={(event) => handleEmailChange(event.target.value)}
             />
@@ -1213,6 +1225,7 @@ function StaffEditor({
           <div className="relative">
             <Input
               className="h-11 pr-10"
+              data-testid="staff-password"
               type={showPassword ? "text" : "password"}
               value={values.password}
               onChange={(event) => updateValue("password", event.target.value)}
@@ -1246,6 +1259,7 @@ function StaffEditor({
         </Button>
         <Button
           className="h-11 min-w-36 rounded-lg bg-[#079669] font-black text-white transition hover:bg-[#05865d] disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="staff-save"
           disabled={!canSubmit || submitting}
           type="button"
           onClick={submit}
