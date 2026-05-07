@@ -3,6 +3,7 @@ package finance
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"kingsway/backend/internal/auth"
@@ -14,6 +15,9 @@ type Store interface {
 	GetStudentByUser(ctx context.Context, userID string) (domain.Student, error)
 	GetTeacher(ctx context.Context, id string) (domain.Teacher, error)
 	GetTeacherByUser(ctx context.Context, userID string) (domain.Teacher, error)
+	UpdateTeacher(ctx context.Context, teacher domain.Teacher) (domain.Teacher, error)
+	DeleteTeacher(ctx context.Context, id string) (domain.Teacher, error)
+	ListTeacherFinanceRecords(ctx context.Context, branchID string) ([]domain.TeacherFinanceRecord, error)
 	CreatePayment(ctx context.Context, payment domain.Payment) (domain.Payment, error)
 	GetPayment(ctx context.Context, id string) (domain.Payment, error)
 	ListPayments(ctx context.Context, branchID string) ([]domain.Payment, error)
@@ -80,6 +84,13 @@ type SwapAllocationInput struct {
 type SwapAllocationResult struct {
 	FirstTeacherAmountCents  int64 `json:"first_teacher_amount_cents"`
 	SecondTeacherAmountCents int64 `json:"second_teacher_amount_cents"`
+}
+
+type TeacherFinanceFilter struct {
+	BranchID    string                 `json:"branch_id"`
+	Subject     string                 `json:"subject"`
+	Status      domain.TeacherStatus   `json:"status"`
+	SalaryModel domain.SalaryModelType `json:"salary_model"`
 }
 
 func NewService(store Store, options ...Option) *Service {
@@ -225,6 +236,12 @@ func (s *Service) CreateSalaryModel(ctx context.Context, actor domain.Principal,
 	if err != nil {
 		return domain.SalaryModel{}, err
 	}
+	if teacher.Status == domain.TeacherStatusPending {
+		teacher.Status = domain.TeacherStatusActive
+		if _, err := s.store.UpdateTeacher(ctx, teacher); err != nil {
+			return domain.SalaryModel{}, err
+		}
+	}
 	s.publishBestEffort(ctx, "finance.salary_model.created", model)
 
 	return model, nil
@@ -261,6 +278,72 @@ func (s *Service) ListSalaryModels(ctx context.Context, actor domain.Principal, 
 	return s.store.ListSalaryModels(ctx, branchID)
 }
 
+func (s *Service) ListTeacherFinanceRecords(ctx context.Context, actor domain.Principal, filter TeacherFinanceFilter) ([]domain.TeacherFinanceRecord, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return nil, err
+	}
+	branchID := strings.TrimSpace(filter.BranchID)
+	if branchID != "" {
+		if err := auth.RequireBranch(actor, branchID); err != nil {
+			return nil, err
+		}
+	}
+
+	records, err := s.store.ListTeacherFinanceRecords(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+
+	subject := normalizeFilter(filter.Subject)
+	filtered := make([]domain.TeacherFinanceRecord, 0, len(records))
+	for _, record := range records {
+		if subject != "" && !strings.Contains(normalizeFilter(record.Subject), subject) {
+			continue
+		}
+		if filter.Status != "" && record.Status != filter.Status {
+			continue
+		}
+		if filter.SalaryModel != "" && record.SalaryType != filter.SalaryModel {
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+
+	return filtered, nil
+}
+
+func (s *Service) DeleteTeacher(ctx context.Context, actor domain.Principal, teacherID string) (domain.Teacher, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return domain.Teacher{}, err
+	}
+	teacherID = strings.TrimSpace(teacherID)
+	if teacherID == "" {
+		return domain.Teacher{}, domain.ErrInvalidInput
+	}
+	teacher, err := s.store.GetTeacher(ctx, teacherID)
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+
+	records, err := s.store.ListTeacherFinanceRecords(ctx, teacher.BranchID)
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	for _, record := range records {
+		if record.ID == teacher.ID && record.AssignedStudents > 0 {
+			return domain.Teacher{}, domain.ErrConflict
+		}
+	}
+
+	deleted, err := s.store.DeleteTeacher(ctx, teacher.ID)
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	s.publishBestEffort(ctx, "finance.teacher.deleted", deleted)
+
+	return deleted, nil
+}
+
 func (s *Service) CalculateSwapAllocation(ctx context.Context, actor domain.Principal, input SwapAllocationInput) (SwapAllocationResult, error) {
 	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleTeacher); err != nil {
 		return SwapAllocationResult{}, err
@@ -289,4 +372,8 @@ func (s *Service) publishBestEffort(ctx context.Context, topic string, payload a
 	}
 
 	_ = s.events.Publish(ctx, topic, payload)
+}
+
+func normalizeFilter(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }

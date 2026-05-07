@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -27,6 +28,7 @@ type Server struct {
 	files    *files.Service
 	notify   *notification.Service
 	admin    *admin.Service
+	idem     IdempotencyStore
 	logger   *zap.Logger
 	mux      *http.ServeMux
 	options  Options
@@ -43,6 +45,7 @@ func New(
 	filesService *files.Service,
 	notificationService *notification.Service,
 	adminService *admin.Service,
+	idempotencyStore IdempotencyStore,
 	logger *zap.Logger,
 	opts ...Options,
 ) *Server {
@@ -54,6 +57,7 @@ func New(
 		files:    filesService,
 		notify:   notificationService,
 		admin:    adminService,
+		idem:     idempotencyStore,
 		logger:   logger,
 		mux:      http.NewServeMux(),
 		options:  options,
@@ -82,6 +86,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/auth/login", s.login)
 	s.mux.HandleFunc("GET /v1/me", s.requireAuth(s.me))
 	s.mux.HandleFunc("GET /v1/session", s.requireAuth(s.session))
+	s.mux.HandleFunc("GET /v1/users/email-availability", s.requireAuth(s.emailAvailability))
 
 	s.mux.HandleFunc("GET /v1/branches", s.requireAuth(s.listBranches))
 	s.mux.HandleFunc("POST /v1/branches", s.requireAuth(s.createBranch))
@@ -92,6 +97,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PATCH /v1/staff/", s.requireAuth(s.staffAction))
 	s.mux.HandleFunc("DELETE /v1/staff/", s.requireAuth(s.staffAction))
 
+	s.mux.HandleFunc("GET /v1/student-assignment-hub", s.requireAuth(s.listStudentAssignmentHub))
 	s.mux.HandleFunc("GET /v1/students", s.requireAuth(s.listStudents))
 	s.mux.HandleFunc("POST /v1/students", s.requireAuth(s.createStudent))
 	s.mux.HandleFunc("GET /v1/students/by-fin/", s.requireAuth(s.getStudentByFIN))
@@ -102,6 +108,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/teachers", s.requireAuth(s.registerTeacher))
 	s.mux.HandleFunc("GET /v1/teachers/", s.requireAuth(s.teacherAction))
 	s.mux.HandleFunc("POST /v1/teachers/", s.requireAuth(s.teacherAction))
+	s.mux.HandleFunc("PATCH /v1/teachers/", s.requireAuth(s.teacherAction))
+	s.mux.HandleFunc("DELETE /v1/teachers/", s.requireAuth(s.teacherAction))
+	s.mux.HandleFunc("GET /v1/teacher-finance", s.requireAuth(s.listTeacherFinance))
 
 	s.mux.HandleFunc("GET /v1/courses", s.requireAuth(s.listCourses))
 	s.mux.HandleFunc("POST /v1/courses", s.requireAuth(s.createCourse))
@@ -117,6 +126,7 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("GET /v1/rooms", s.requireAuth(s.listRooms))
 	s.mux.HandleFunc("POST /v1/rooms", s.requireAuth(s.createRoom))
+	s.mux.HandleFunc("PATCH /v1/rooms/", s.requireAuth(s.roomAction))
 	s.mux.HandleFunc("DELETE /v1/rooms/", s.requireAuth(s.roomAction))
 
 	s.mux.HandleFunc("GET /v1/schedules", s.requireAuth(s.listSchedule))
@@ -180,7 +190,7 @@ func (s *Server) requireAuth(next func(http.ResponseWriter, *http.Request, domai
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, Idempotency-Key")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Total-Count, X-Limit, X-Offset, X-Request-ID")
 		if r.Method == http.MethodOptions {
@@ -243,17 +253,21 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, principal domain.Pri
 	writeJSON(w, http.StatusOK, user)
 }
 
-func (s *Server) createBranch(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
-	var input academic.CreateBranchInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	branch, err := s.academic.CreateBranch(r.Context(), principal, input)
+func (s *Server) emailAvailability(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	result, err := s.auth.CheckEmailAvailability(r.Context(), principal, r.URL.Query().Get("email"))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, branch)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) createBranch(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	var input academic.CreateBranchInput
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		branch, err := s.academic.CreateBranch(r.Context(), principal, input)
+		return http.StatusCreated, branch, err
+	})
 }
 
 func (s *Server) listBranches(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -328,16 +342,11 @@ func (s *Server) branchStaffAction(w http.ResponseWriter, r *http.Request, princ
 		writePagedJSON(w, r, staff)
 	case http.MethodPost:
 		var input academic.CreateStaffInput
-		if !decodeJSON(w, r, &input) {
-			return
-		}
-		input.BranchID = branchID
-		staff, err := s.academic.CreateStaffMember(r.Context(), principal, input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, staff)
+		s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+			input.BranchID = branchID
+			staff, err := s.academic.CreateStaffMember(r.Context(), principal, input)
+			return http.StatusCreated, staff, err
+		})
 	default:
 		writeError(w, domain.ErrNotFound)
 	}
@@ -386,15 +395,10 @@ func (s *Server) staffAction(w http.ResponseWriter, r *http.Request, principal d
 
 func (s *Server) createStudent(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateStudentInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	student, err := s.academic.CreateStudent(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, student)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		student, err := s.academic.CreateStudent(r.Context(), principal, input)
+		return http.StatusCreated, student, err
+	})
 }
 
 func (s *Server) listStudents(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -414,6 +418,28 @@ func (s *Server) listStudents(w http.ResponseWriter, r *http.Request, principal 
 		students = filtered
 	}
 	writePagedJSON(w, r, students)
+}
+
+func (s *Server) listStudentAssignmentHub(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	page, err := parsePage(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result, err := s.academic.ListStudentAssignmentHub(r.Context(), principal, domain.StudentAssignmentHubFilter{
+		BranchID:  r.URL.Query().Get("branch_id"),
+		Status:    domain.StudentStatus(strings.TrimSpace(r.URL.Query().Get("status"))),
+		TeacherID: r.URL.Query().Get("teacher_id"),
+		Query:     r.URL.Query().Get("q"),
+		Limit:     page.Limit,
+		Offset:    page.Offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writePageHeaders(w, page, result.Total)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) getStudentByFIN(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -438,17 +464,25 @@ func (s *Server) studentAction(w http.ResponseWriter, r *http.Request, principal
 		writeJSON(w, http.StatusOK, student)
 		return
 	}
-	if len(parts) == 2 && parts[1] == "account" && r.Method == http.MethodPost {
-		var input academic.CreateStudentAccountInput
+	if len(parts) == 1 && parts[0] != "" && r.Method == http.MethodPatch {
+		var input academic.UpdateStudentInput
 		if !decodeJSON(w, r, &input) {
 			return
 		}
-		student, user, err := s.academic.CreateStudentAccount(r.Context(), principal, parts[0], input)
+		student, err := s.academic.UpdateStudent(r.Context(), principal, parts[0], input)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"student": student, "user": user})
+		writeJSON(w, http.StatusOK, student)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "account" && r.Method == http.MethodPost {
+		var input academic.CreateStudentAccountInput
+		s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+			student, user, err := s.academic.CreateStudentAccount(r.Context(), principal, parts[0], input)
+			return http.StatusCreated, map[string]any{"student": student, "user": user}, err
+		})
 		return
 	}
 
@@ -459,17 +493,47 @@ func (s *Server) studentAction(w http.ResponseWriter, r *http.Request, principal
 	writeError(w, domain.ErrNotFound)
 }
 
+type registerTeacherRequest struct {
+	academic.RegisterTeacherInput
+	SalaryModel               domain.SalaryModelType `json:"salary_model"`
+	FixedMonthlyAmountCents   int64                  `json:"fixed_monthly_amount_cents"`
+	StudentPercentBasisPoints int                    `json:"student_percent_basis_points"`
+}
+
 func (s *Server) registerTeacher(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
-	var input academic.RegisterTeacherInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	teacher, user, err := s.academic.RegisterTeacher(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"teacher": teacher, "user": user})
+	var input registerTeacherRequest
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		if !principal.IsOwner() && input.SalaryModel != "" {
+			return 0, nil, domain.ErrForbidden
+		}
+		if err := validateTeacherSalaryRequest(input.SalaryModel, input.FixedMonthlyAmountCents, input.StudentPercentBasisPoints); err != nil {
+			return 0, nil, err
+		}
+		teacher, user, err := s.academic.RegisterTeacher(r.Context(), principal, input.RegisterTeacherInput)
+		if err != nil {
+			return 0, nil, err
+		}
+		var salaryModel *domain.SalaryModel
+		if input.SalaryModel != "" {
+			model, err := s.finance.CreateSalaryModel(r.Context(), principal, finance.CreateSalaryModelInput{
+				BranchID:                  teacher.BranchID,
+				TeacherID:                 teacher.ID,
+				ModelType:                 input.SalaryModel,
+				FixedMonthlyAmountCents:   input.FixedMonthlyAmountCents,
+				StudentPercentBasisPoints: input.StudentPercentBasisPoints,
+				ActiveFrom:                time.Now().UTC(),
+			})
+			if err != nil {
+				return 0, nil, err
+			}
+			salaryModel = &model
+			teacher, err = s.academic.ActivateTeacher(r.Context(), principal, teacher.ID)
+			if err != nil {
+				return 0, nil, err
+			}
+		}
+		return http.StatusCreated, map[string]any{"teacher": teacher, "user": user, "salary_model": salaryModel}, nil
+	})
 }
 
 func (s *Server) listTeachers(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -491,12 +555,103 @@ func (s *Server) listTeachers(w http.ResponseWriter, r *http.Request, principal 
 	writePagedJSON(w, r, teachers)
 }
 
+func (s *Server) listTeacherFinance(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
+	records, err := s.finance.ListTeacherFinanceRecords(r.Context(), principal, finance.TeacherFinanceFilter{
+		BranchID:    r.URL.Query().Get("branch_id"),
+		Subject:     r.URL.Query().Get("subject"),
+		Status:      domain.TeacherStatus(strings.TrimSpace(r.URL.Query().Get("status"))),
+		SalaryModel: domain.SalaryModelType(strings.TrimSpace(r.URL.Query().Get("salary_model"))),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writePagedJSON(w, r, records)
+}
+
+func validateTeacherSalaryRequest(model domain.SalaryModelType, amountCents int64, percentBasisPoints int) error {
+	if model == "" {
+		return nil
+	}
+	if !model.IsValid() {
+		return domain.ErrInvalidInput
+	}
+	if model == domain.SalaryModelFixed || model == domain.SalaryModelHybrid {
+		if amountCents <= 0 {
+			return domain.ErrInvalidInput
+		}
+	}
+	if model == domain.SalaryModelPercent || model == domain.SalaryModelHybrid {
+		if percentBasisPoints < 0 || percentBasisPoints > 10000 {
+			return domain.ErrInvalidInput
+		}
+	}
+
+	return nil
+}
+
 func (s *Server) teacherAction(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	path := strings.TrimPrefix(r.URL.Path, "/v1/teachers/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
 	if r.Method == http.MethodGet && len(parts) == 1 && parts[0] != "" {
 		teacher, err := s.academic.GetTeacher(r.Context(), principal, parts[0])
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, teacher)
+		return
+	}
+	if r.Method == http.MethodPatch && len(parts) == 1 && parts[0] != "" {
+		var input academic.UpdateTeacherInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		input.ID = parts[0]
+		teacher, err := s.academic.UpdateTeacher(r.Context(), principal, input)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, teacher)
+		return
+	}
+	if r.Method == http.MethodDelete && len(parts) == 1 && parts[0] != "" {
+		existingTeacher, err := s.academic.GetTeacher(r.Context(), principal, parts[0])
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		records, err := s.finance.ListTeacherFinanceRecords(r.Context(), principal, finance.TeacherFinanceFilter{
+			BranchID: existingTeacher.BranchID,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		for _, record := range records {
+			if record.ID == existingTeacher.ID && record.AssignedStudents > 0 {
+				writeError(w, domain.ErrConflict)
+				return
+			}
+		}
+		branchFiles, err := s.files.ListFiles(r.Context(), principal, existingTeacher.BranchID)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		for _, file := range branchFiles {
+			if file.UploaderUserID != existingTeacher.UserID && (file.OwnerType != "teacher" || file.OwnerID != existingTeacher.ID) {
+				continue
+			}
+			if _, err := s.files.DeleteFile(r.Context(), principal, file.ID); err != nil && !errors.Is(err, domain.ErrNotFound) {
+				writeError(w, err)
+				return
+			}
+		}
+
+		teacher, err := s.finance.DeleteTeacher(r.Context(), principal, parts[0])
 		if err != nil {
 			writeError(w, err)
 			return
@@ -518,15 +673,10 @@ func (s *Server) teacherAction(w http.ResponseWriter, r *http.Request, principal
 
 func (s *Server) createCourse(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateCourseInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	course, categories, err := s.academic.CreateCourse(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"course": course, "categories": categories})
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		course, categories, err := s.academic.CreateCourse(r.Context(), principal, input)
+		return http.StatusCreated, map[string]any{"course": course, "categories": categories}, err
+	})
 }
 
 func (s *Server) listCourses(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -554,15 +704,10 @@ func (s *Server) courseAction(w http.ResponseWriter, r *http.Request, principal 
 
 func (s *Server) createClass(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateClassInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	class, err := s.academic.CreateClass(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, class)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		class, err := s.academic.CreateClass(r.Context(), principal, input)
+		return http.StatusCreated, class, err
+	})
 }
 
 func (s *Server) listClasses(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -615,16 +760,11 @@ func (s *Server) classAction(w http.ResponseWriter, r *http.Request, principal d
 		writePagedJSON(w, r, enrollments)
 	case parts[1] == "students" && r.Method == http.MethodPost:
 		var input academic.EnrollStudentInput
-		if !decodeJSON(w, r, &input) {
-			return
-		}
-		input.ClassID = parts[0]
-		enrollment, err := s.academic.EnrollStudent(r.Context(), principal, input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, enrollment)
+		s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+			input.ClassID = parts[0]
+			enrollment, err := s.academic.EnrollStudent(r.Context(), principal, input)
+			return http.StatusCreated, enrollment, err
+		})
 	case parts[1] == "assignments" && r.Method == http.MethodGet:
 		assignments, err := s.academic.ListAssignments(r.Context(), principal, "", parts[0])
 		if err != nil {
@@ -634,16 +774,11 @@ func (s *Server) classAction(w http.ResponseWriter, r *http.Request, principal d
 		writePagedJSON(w, r, assignments)
 	case parts[1] == "assignments" && r.Method == http.MethodPost:
 		var input academic.CreateAssignmentInput
-		if !decodeJSON(w, r, &input) {
-			return
-		}
-		input.ClassID = parts[0]
-		assignment, err := s.academic.CreateAssignment(r.Context(), principal, input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, assignment)
+		s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+			input.ClassID = parts[0]
+			assignment, err := s.academic.CreateAssignment(r.Context(), principal, input)
+			return http.StatusCreated, assignment, err
+		})
 	default:
 		writeError(w, domain.ErrNotFound)
 	}
@@ -651,15 +786,10 @@ func (s *Server) classAction(w http.ResponseWriter, r *http.Request, principal d
 
 func (s *Server) createAssignment(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateAssignmentInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	assignment, err := s.academic.CreateAssignment(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, assignment)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		assignment, err := s.academic.CreateAssignment(r.Context(), principal, input)
+		return http.StatusCreated, assignment, err
+	})
 }
 
 func (s *Server) listAssignments(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -678,15 +808,10 @@ func (s *Server) listAssignments(w http.ResponseWriter, r *http.Request, princip
 
 func (s *Server) createRoom(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateRoomInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	room, err := s.academic.CreateRoom(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, room)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		room, err := s.academic.CreateRoom(r.Context(), principal, input)
+		return http.StatusCreated, room, err
+	})
 }
 
 func (s *Server) listRooms(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -700,30 +825,42 @@ func (s *Server) listRooms(w http.ResponseWriter, r *http.Request, principal dom
 
 func (s *Server) roomAction(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/rooms/"), "/")
-	if id == "" || r.Method != http.MethodDelete {
+	if id == "" {
 		writeError(w, domain.ErrNotFound)
 		return
 	}
 
-	room, err := s.academic.RemoveRoom(r.Context(), principal, id)
-	if err != nil {
-		writeError(w, err)
-		return
+	switch r.Method {
+	case http.MethodPatch:
+		var input academic.UpdateRoomInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		input.ID = id
+		room, err := s.academic.UpdateRoom(r.Context(), principal, input)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, room)
+	case http.MethodDelete:
+		room, err := s.academic.RemoveRoom(r.Context(), principal, id)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, room)
+	default:
+		writeError(w, domain.ErrNotFound)
 	}
-	writeJSON(w, http.StatusOK, room)
 }
 
 func (s *Server) createScheduleItem(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateScheduleItemInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	item, err := s.academic.CreateScheduleItem(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, item)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		item, err := s.academic.CreateScheduleItem(r.Context(), principal, input)
+		return http.StatusCreated, item, err
+	})
 }
 
 func (s *Server) listSchedule(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -747,15 +884,10 @@ func (s *Server) listSchedule(w http.ResponseWriter, r *http.Request, principal 
 
 func (s *Server) createExam(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input academic.CreateExamInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	exam, participants, err := s.academic.CreateExam(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"exam": exam, "participants": participants})
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		exam, participants, err := s.academic.CreateExam(r.Context(), principal, input)
+		return http.StatusCreated, map[string]any{"exam": exam, "participants": participants}, err
+	})
 }
 
 func (s *Server) listExams(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -799,16 +931,11 @@ func (s *Server) examAction(w http.ResponseWriter, r *http.Request, principal do
 		writePagedJSON(w, r, results)
 	case http.MethodPost:
 		var input academic.CreateExamResultInput
-		if !decodeJSON(w, r, &input) {
-			return
-		}
-		input.ExamID = parts[0]
-		result, err := s.academic.CreateExamResult(r.Context(), principal, input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, result)
+		s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+			input.ExamID = parts[0]
+			result, err := s.academic.CreateExamResult(r.Context(), principal, input)
+			return http.StatusCreated, result, err
+		})
 	default:
 		writeError(w, domain.ErrNotFound)
 	}
@@ -840,15 +967,10 @@ func (s *Server) academicDashboard(w http.ResponseWriter, r *http.Request, princ
 
 func (s *Server) createPayment(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input finance.CreatePaymentInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	payment, err := s.finance.CreatePayment(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, payment)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		payment, err := s.finance.CreatePayment(r.Context(), principal, input)
+		return http.StatusCreated, payment, err
+	})
 }
 
 func (s *Server) listPayments(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -886,15 +1008,10 @@ func (s *Server) paymentAction(w http.ResponseWriter, r *http.Request, principal
 
 func (s *Server) createSalaryModel(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input finance.CreateSalaryModelInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	model, err := s.finance.CreateSalaryModel(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, model)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		model, err := s.finance.CreateSalaryModel(r.Context(), principal, input)
+		return http.StatusCreated, model, err
+	})
 }
 
 func (s *Server) listSalaryModels(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
@@ -921,15 +1038,10 @@ func (s *Server) calculateSwapAllocation(w http.ResponseWriter, r *http.Request,
 
 func (s *Server) registerFile(w http.ResponseWriter, r *http.Request, principal domain.Principal) {
 	var input files.RegisterFileInput
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	file, err := s.files.RegisterFile(r.Context(), principal, input)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, file)
+	s.decodeIdempotentJSON(w, r, principal, &input, func() (int, any, error) {
+		file, err := s.files.RegisterFile(r.Context(), principal, input)
+		return http.StatusCreated, file, err
+	})
 }
 
 func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request, principal domain.Principal) {

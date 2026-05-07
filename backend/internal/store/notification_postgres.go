@@ -94,7 +94,7 @@ func (p *Postgres) ListUsersByBranchAndRoles(ctx context.Context, branchID strin
 	}
 
 	rows, err := p.pool.Query(ctx, `
-		SELECT id::text, coalesce(branch_id::text, ''), role, email, password_hash, first_name, last_name, is_active, created_at, updated_at
+		SELECT id::text, coalesce(branch_id::text, ''), role, email, password_hash, first_name, last_name, is_active, coalesce(last_login_at::text, ''), created_at, updated_at
 		FROM users
 		WHERE is_active = true
 			AND role = ANY($2::text[])

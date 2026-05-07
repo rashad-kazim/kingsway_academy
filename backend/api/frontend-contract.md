@@ -6,12 +6,14 @@ Authentication: send `Authorization: Bearer <token>` for every `/v1/*` endpoint 
 
 Every response includes `X-Request-ID`. The frontend may send its own `X-Request-ID` for correlation.
 
+Write/create-style JSON `POST` endpoints accept optional `Idempotency-Key`. The frontend should generate one key per submit attempt and reuse it for safe retry of the same payload. Repeating the same key and same body returns the original successful response; repeating the same key with a different body returns `409 conflict`.
+
 All list endpoints accept:
 
 - `limit`: integer `1..500`, default `100`
 - `offset`: integer `>=0`, default `0`
 
-List responses are JSON arrays and include headers:
+Most list responses are JSON arrays and include headers:
 
 - `X-Total-Count`
 - `X-Limit`
@@ -44,15 +46,17 @@ Errors use:
 ## Stable List And Detail Endpoints
 
 - Branches: `GET /v1/branches`, `POST /v1/branches`, `PATCH /v1/branches/{branch_id}`, `DELETE /v1/branches/{branch_id}`
-- Branch staff: `GET /v1/branches/{branch_id}/staff`, `POST /v1/branches/{branch_id}/staff`, `PATCH /v1/staff/{staff_id}`, `DELETE /v1/staff/{staff_id}`
-- Students: `GET /v1/students?branch_id=&status=active`, `GET /v1/students/{student_id}`, `GET /v1/students/by-fin/{fin}`
+- Branch staff / Receptionist Management: `GET /v1/branches/{branch_id}/staff`, `POST /v1/branches/{branch_id}/staff`, `PATCH /v1/staff/{staff_id}`, `DELETE /v1/staff/{staff_id}`. Staff records include gender, address, hire date, active/inactive status, last login, salary, and profile photo file reference. `PATCH` can update profile fields, branch assignment, and `is_active`; `DELETE` is a hard delete.
+- Students: `GET /v1/students?branch_id=&status=active`, `POST /v1/students`, `GET /v1/students/{student_id}`, `PATCH /v1/students/{student_id}`, `GET /v1/students/by-fin/{fin}`. Student create now accepts profile fields, parent contacts, selected course registrations, optional teacher assignment per course, and monthly payment amount per course; student profile photos use `POST /v1/files/upload` with `owner_type=student` and `purpose=profile_photo`.
+- Student & Assignment Hub: `GET /v1/student-assignment-hub?branch_id=&status=&teacher_id=&q=&limit=&offset=` returns `{ items, total, limit, offset }` for the combined Owner list. Status values are `active`, `left`, and `graduated`; `q` searches first name, last name, full name, and FIN code. This does not replace create/detail/enrollment endpoints.
 - Student account: `POST /v1/students/{student_id}/account` creates a student login and links it to the student record.
-- Teachers: `GET /v1/teachers?branch_id=&status=active`, `GET /v1/teachers/{teacher_id}`
+- Teachers: `GET /v1/teachers?branch_id=&status=active`, `GET /v1/teachers/{teacher_id}`, `PATCH /v1/teachers/{teacher_id}` updates teacher profile/login/subjects, `DELETE /v1/teachers/{teacher_id}` hard-deletes a teacher when no active students are assigned.
+- Teacher Finance & HR: `GET /v1/teacher-finance?branch_id=&subject=&status=&salary_model=` returns the Owner table rows with profile, profile photo file reference, branch, subject, status, salary type, assigned student count, and calculated salary cache value.
 - Courses: `GET /v1/courses?branch_id=`, `GET /v1/courses/{course_id}`
 - Classes: `GET /v1/classes?branch_id=&active=true`, `GET /v1/classes/{class_id}`
 - Class students: `GET /v1/classes/{class_id}/students`
 - Assignments: `GET /v1/assignments?branch_id=&class_id=`, `GET /v1/classes/{class_id}/assignments`
-- Rooms: `GET /v1/rooms?branch_id=`, `POST /v1/rooms`, `DELETE /v1/rooms/{room_id}`
+- Rooms: `GET /v1/rooms?branch_id=`, `POST /v1/rooms`, `PATCH /v1/rooms/{room_id}`, `DELETE /v1/rooms/{room_id}`
 - Schedule: `GET /v1/schedules?branch_id=&item_type=lesson`
 - Exams: `GET /v1/exams?branch_id=&class_id=`, `GET /v1/exams/{exam_id}`
 - Exam results: `GET /v1/exam-results?branch_id=&exam_id=&student_id=`, `GET /v1/exams/{exam_id}/results`

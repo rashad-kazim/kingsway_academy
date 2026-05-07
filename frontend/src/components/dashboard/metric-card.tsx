@@ -12,7 +12,7 @@ export function MetricCard({ label, value, icon: Icon }: MetricCardProps) {
     <Card className="rounded-lg">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
+        <Icon className="size-4 text-[#ef2334] dark:text-[#ff3b4f]" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-semibold tabular-nums">{value}</div>

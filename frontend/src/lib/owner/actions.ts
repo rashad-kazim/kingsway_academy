@@ -6,11 +6,13 @@ import {
   createRoom,
   createBranch,
   createBranchStaff,
+  checkEmailAvailability,
   deleteBranch,
   deleteFile,
   deleteRoom,
   deleteStaff,
   getFileDownloadURL,
+  updateRoom,
   updateStaff,
   updateBranch,
   uploadBranchPhoto,
@@ -67,6 +69,7 @@ export type StaffManagementState = {
   deletedStaffID?: string;
   error?:
     | "invalid_input"
+    | "invalid_hire_date"
     | "duplicate"
     | "unauthorized"
     | "backend"
@@ -117,15 +120,35 @@ const roomDraftSchema = z.array(
 
 const removedRoomIDsSchema = z.array(z.string().trim().min(1));
 
+const updatedRoomSchema = z.array(
+  z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(80),
+    capacity: z.coerce.number().int().min(1).max(500),
+  }),
+);
+
 const staffBaseSchema = z.object({
   branchID: z.string().trim().min(1),
   staffID: z.string().trim(),
   firstName: z.string().trim().min(2).max(80),
   lastName: z.string().trim().min(2).max(80),
-  birthDate: z.string().trim().regex(/^$|^\d{2}\/\d{2}\/\d{4}$/),
+  birthDate: z
+    .string()
+    .trim()
+    .regex(/^$|^\d{2}\/\d{2}\/\d{4}$/)
+    .refine(isEmptyOrValidDateString),
+  gender: z.enum(["", "male", "female", "other"]),
   phone: z.string().trim().max(40),
+  address: z.string().trim().max(1000),
+  hiredAt: z
+    .string()
+    .trim()
+    .regex(/^$|^\d{2}\/\d{2}\/\d{4}$/)
+    .refine(isEmptyOrValidDateString),
   salary: z.string().trim().regex(/^\d*$/),
   email: z.string().trim().email().max(160),
+  isActive: z.boolean(),
   password: z.string(),
   profilePhotoFileID: z.string().trim(),
   removePhoto: z.boolean(),
@@ -157,6 +180,7 @@ export async function createBranchAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   const photo = formData.get("photo");
   const photoValidation = validateBranchPhoto(photo);
@@ -174,6 +198,7 @@ export async function createBranchAction(
         closing_time: parsed.data.closingTime,
       },
       token,
+      idempotencyKey,
     );
     if (photoValidation.file) {
       try {
@@ -260,7 +285,8 @@ export async function saveBranchManagementAction(
     formData.get("removed_room_ids"),
     removedRoomIDsSchema,
   );
-  if (!newRooms.ok || !removedRoomIDs.ok) {
+  const updatedRooms = parseJSON(formData.get("updated_rooms"), updatedRoomSchema);
+  if (!newRooms.ok || !removedRoomIDs.ok || !updatedRooms.ok) {
     return { error: "invalid_room" };
   }
 
@@ -268,6 +294,7 @@ export async function saveBranchManagementAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   const photoValidation = validateBranchPhoto(formData.get("photo"));
   if (photoValidation.error) {
@@ -345,6 +372,28 @@ export async function saveBranchManagementAction(
         }
       }
     }
+    for (const room of updatedRooms.data) {
+      if (removedRoomIDs.data.includes(room.id)) {
+        continue;
+      }
+      try {
+        rooms.push(
+          await updateRoom(
+            room.id,
+            {
+              name: room.name,
+              capacity: room.capacity,
+            },
+            token,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          return { error: "duplicate_room" };
+        }
+        throw error;
+      }
+    }
     for (const room of newRooms.data) {
       try {
         rooms.push(
@@ -355,6 +404,7 @@ export async function saveBranchManagementAction(
               capacity: room.capacity,
             },
             token,
+            idempotencyKey ? `${idempotencyKey}:room:${room.name}` : undefined,
           ),
         );
       } catch (error) {
@@ -416,11 +466,15 @@ export async function createStaffAction(
   if (!parsed.success || parsed.data.password.length < 8) {
     return { error: "invalid_input" };
   }
+  if (!isHireDateOnOrAfterBirthDate(parsed.data.birthDate, parsed.data.hiredAt)) {
+    return { error: "invalid_hire_date" };
+  }
 
   const token = await getAuthToken();
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   const photoValidation = validateBranchPhoto(formData.get("photo"));
   if (photoValidation.error) {
@@ -434,12 +488,16 @@ export async function createStaffAction(
         birth_date: parsed.data.birthDate,
         email: parsed.data.email,
         first_name: parsed.data.firstName,
+        gender: parsed.data.gender,
+        address: parsed.data.address,
+        hired_at: parsed.data.hiredAt,
         last_name: parsed.data.lastName,
         password: parsed.data.password,
         phone: parsed.data.phone,
         salary_amount_azn: salaryAmount(parsed.data.salary),
       },
       token,
+      idempotencyKey,
     );
 
     if (photoValidation.file) {
@@ -456,6 +514,9 @@ export async function createStaffAction(
           birth_date: parsed.data.birthDate,
           email: parsed.data.email,
           first_name: parsed.data.firstName,
+          gender: parsed.data.gender,
+          address: parsed.data.address,
+          hired_at: parsed.data.hiredAt,
           last_name: parsed.data.lastName,
           phone: parsed.data.phone,
           profile_photo_file_id: file.id,
@@ -472,6 +533,9 @@ export async function createStaffAction(
 
     return { staff };
   } catch (error) {
+    if (error instanceof ApiError && error.status === 400) {
+      return { error: "invalid_input" };
+    }
     if (error instanceof ApiError && error.status === 409) {
       return { error: "duplicate" };
     }
@@ -492,6 +556,9 @@ export async function updateStaffAction(
   }
   if (parsed.data.password && parsed.data.password.length < 8) {
     return { error: "invalid_input" };
+  }
+  if (!isHireDateOnOrAfterBirthDate(parsed.data.birthDate, parsed.data.hiredAt)) {
+    return { error: "invalid_hire_date" };
   }
 
   const token = await getAuthToken();
@@ -535,10 +602,15 @@ export async function updateStaffAction(
       parsed.data.staffID,
       {
         birth_date: parsed.data.birthDate,
+        branch_id: parsed.data.branchID,
         email: parsed.data.email,
         first_name: parsed.data.firstName,
+        gender: parsed.data.gender,
+        address: parsed.data.address,
+        hired_at: parsed.data.hiredAt,
         last_name: parsed.data.lastName,
         password: parsed.data.password || undefined,
+        is_active: parsed.data.isActive,
         phone: parsed.data.phone,
         profile_photo_file_id: profilePhotoFileID,
         salary_amount_azn: salaryAmount(parsed.data.salary),
@@ -554,6 +626,9 @@ export async function updateStaffAction(
       },
     };
   } catch (error) {
+    if (error instanceof ApiError && error.status === 400) {
+      return { error: "invalid_input" };
+    }
     if (error instanceof ApiError && error.status === 409) {
       return { error: "duplicate" };
     }
@@ -580,12 +655,24 @@ export async function deleteStaffAction(
 
   try {
     const staff = await deleteStaff(staffID, token);
-    return { deletedStaffID: staff.id };
+    return { staff, deletedStaffID: staff.id };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       return { error: "unauthorized" };
     }
     return { error: "backend" };
+  }
+}
+
+export async function checkStaffEmailAvailabilityAction(email: string) {
+  const token = await getAuthToken();
+  if (!token) {
+    return { available: false };
+  }
+  try {
+    return await checkEmailAvailability(email, token);
+  } catch {
+    return { available: false };
   }
 }
 
@@ -595,6 +682,10 @@ function staffFormValues(formData: FormData) {
     branchID: formData.get("branch_id"),
     email: formData.get("email"),
     firstName: formData.get("first_name"),
+    gender: formData.get("gender") ?? "",
+    address: formData.get("address") ?? "",
+    hiredAt: formData.get("hired_at") ?? "",
+    isActive: formData.get("is_active") !== "0",
     lastName: formData.get("last_name"),
     password: String(formData.get("password") ?? ""),
     phone: formData.get("phone") ?? "",
@@ -607,6 +698,60 @@ function staffFormValues(formData: FormData) {
 
 function salaryAmount(value: string) {
   return Number.parseInt(value || "0", 10) || 0;
+}
+
+function stringField(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+function isEmptyOrValidDateString(value: string) {
+  if (!value) {
+    return true;
+  }
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function isHireDateOnOrAfterBirthDate(birthDate: string, hiredAt: string) {
+  const birth = parseDateString(birthDate);
+  const hired = parseDateString(hiredAt);
+  if (!birth || !hired) {
+    return true;
+  }
+
+  return hired.getTime() >= birth.getTime();
+}
+
+function parseDateString(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
 }
 
 function validateBranchPhoto(value: FormDataEntryValue | null): {

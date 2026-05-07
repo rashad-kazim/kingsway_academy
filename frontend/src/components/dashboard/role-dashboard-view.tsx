@@ -315,12 +315,12 @@ function ownerMetricsFor(
     },
     {
       label: labels.ownerGlobal.debtTracker,
-      value: formatAZN(0),
+      value: formatManat(0),
       icon: AlertTriangle,
     },
     {
       label: labels.ownerGlobal.totalTurnover,
-      value: formatAZN(0),
+      value: formatManat(0),
       icon: Banknote,
     },
   ];
@@ -651,10 +651,9 @@ function shortID(value: unknown) {
   return value.length > 8 ? value.slice(0, 8) : value;
 }
 
-function formatAZN(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    currency: "AZN",
+function formatManat(value: number) {
+  const formatted = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
-    style: "currency",
   }).format(value);
+  return `₼ ${formatted}`;
 }

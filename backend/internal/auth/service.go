@@ -15,6 +15,7 @@ type UserStore interface {
 	CreateUser(ctx context.Context, user domain.User) (domain.User, error)
 	GetUser(ctx context.Context, id string) (domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.User, error)
+	RecordUserLogin(ctx context.Context, id string) (domain.User, error)
 }
 
 type Service struct {
@@ -46,6 +47,11 @@ type LoginInput struct {
 type LoginResult struct {
 	Token string      `json:"token"`
 	User  domain.User `json:"user"`
+}
+
+type EmailAvailabilityResult struct {
+	Email     string `json:"email"`
+	Available bool   `json:"available"`
 }
 
 func NewService(store UserStore, jwtSecret string) *Service {
@@ -126,6 +132,9 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (LoginResult, err
 	if !user.IsActive || !CheckPassword(user.PasswordHash, input.Password) {
 		return LoginResult{}, domain.ErrUnauthorized
 	}
+	if updated, err := s.store.RecordUserLogin(ctx, user.ID); err == nil {
+		user = updated
+	}
 
 	token, err := SignToken(s.jwtSecret, Claims{
 		UserID:   user.ID,
@@ -166,6 +175,25 @@ func (s *Service) CurrentUser(ctx context.Context, principal domain.Principal) (
 	}
 
 	return user, nil
+}
+
+func (s *Service) CheckEmailAvailability(ctx context.Context, principal domain.Principal, email string) (EmailAvailabilityResult, error) {
+	if err := RequireAnyRole(principal, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return EmailAvailabilityResult{}, err
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || !strings.Contains(email, "@") {
+		return EmailAvailabilityResult{}, domain.ErrInvalidInput
+	}
+	_, err := s.store.GetUserByEmail(ctx, email)
+	if err == nil {
+		return EmailAvailabilityResult{Email: email, Available: false}, nil
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		return EmailAvailabilityResult{Email: email, Available: true}, nil
+	}
+
+	return EmailAvailabilityResult{}, err
 }
 
 func HashPassword(password string) (string, error) {

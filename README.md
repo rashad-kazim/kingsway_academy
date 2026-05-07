@@ -653,9 +653,223 @@ Only use Docker again after explicit instruction.
   - Branch Management table now shows assigned receptionist avatars/counts per branch instead of a static unassigned placeholder.
   - Updated frontend API types/client/actions and OpenAPI/frontend contract for branch staff.
   - Verification: `npm run lint`, `npm run build`, and `go test ./cmd/api-server` passed. `go test ./internal/academic` is still blocked by Windows Application Control for the generated `academic.test.exe`.
+- 2026-05-04 Branch Detail staff/room UX polish:
+  - Staff birth date input now auto-formats digit-only typing like `15071998` into `15/07/1998`.
+  - Staff password input now has a show/hide eye toggle.
+  - Existing Rooms now support edit drafts; Branch Detail save persists them through new backend `PATCH /v1/rooms/{room_id}`.
+  - Existing Room delete now opens a user-facing warning dialog that Schedule, Events, and Tasks may be affected before marking the room for removal.
+  - Dashboard and staff salary displays now use the Manat symbol instead of `AZN`.
+  - Updated frontend API types/client/actions and OpenAPI/frontend contract for room update.
+  - Verification: `go test ./cmd/api-server`, `npm run lint`, and `npm run build` passed.
+- 2026-05-04 Teacher Finance & HR foundation:
+  - Added Owner-only backend `GET /v1/teacher-finance` with branch, subject, status, and salary model filters. Rows include teacher profile data, branch, subject summary, status, salary type, assigned student count, and calculated salary cents.
+  - Added backend `DELETE /v1/teachers/{teacher_id}` as an Owner-only destructive delete flow: assigned students block the action with `409`; otherwise teacher-owned/uploaded file objects are removed first, then the teacher, linked login user, and teacher-owned DB records are hard-deleted.
+  - Added the Owner sidebar Teacher Finance & HR view with filter dropdowns, glass table, status/salary labels, calculated salary in Manat, Edit/Delete actions, and two-stage delete confirmation.
+  - Teacher delete confirmation now has an extra final impact warning: after typing the teacher name, the first Delete opens a permanent-deletion warning, and only Continue performs the backend delete.
+  - Teacher delete impact warning copy was adjusted to avoid technical `Owner account` wording and use user-facing "not shared with you" language.
+  - Added `/[locale]/dashboard/owner/teacher/add` as a placeholder route for the Add Teacher button; full Add Teacher form details are deferred until the user provides that screen spec.
+  - Updated frontend API types/client/actions plus OpenAPI/frontend contract for teacher finance records and teacher delete.
+  - Verification: `go test ./cmd/api-server`, `npm run lint`, and `npm run build` passed. Docker was not used.
+- 2026-05-04 Add Teacher form implementation:
+  - Increased Branch Management and Teacher Finance & HR table row height so both tables feel less compressed.
+  - Replaced the Add Teacher placeholder with a full Owner form: circular profile photo picker, required-field stars, branch assignment, subject chips, salary model with dynamic financial inputs, DD/MM/YYYY birth date formatting, password visibility toggle, and centered Save/Cancel actions.
+  - Added live email availability checking through new authenticated backend `GET /v1/users/email-availability`.
+  - Extended backend teacher registration to persist teacher profile fields, create/attach subject courses, and create the selected salary model on registration.
+  - Added teacher profile persistence migration `202605040001_teacher_profiles.sql` and `PATCH /v1/teachers/{teacher_id}` for profile-photo linking after upload.
+  - Teacher profile photos use the existing `standard` + `profile_photo` upload path; current backend optimizer still stores screen-sized optimized JPEG, not WebP.
+  - Verification: `npm run lint`, `npm run build`, and `go test ./internal/...` passed. Docker was not used.
+- 2026-05-04 Branch delete confirmation warning polish:
+  - Branch Management delete confirmation now shows a prominent red irreversible-delete warning before the branch-name confirmation instructions.
+  - The Delete button remains disabled until the typed branch name exactly matches; Cancel closes the full delete dialog flow.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-04 Branch delete/startup bug fix:
+  - Fixed Branch Management actions so clicking the three-dot Delete item no longer bubbles into the table row and opens Branch Detail.
+  - Fixed backend startup failure by adding the missing Goose `-- +goose Up/Down` markers to `202605040001_teacher_profiles.sql`.
+  - Rebuilt `.runtime/backend-api-server.exe` after the migration fix.
+  - Verification: `npm run lint`, `npm run build`, `go test ./...`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-04 Teacher filters and Add Branch photo polish:
+  - Add New Branch drawer photo picker now shows the selected photo inside the circular control and adds a circular top-right remove button.
+  - Teacher Finance & HR now has a Reset Filter button plus removable selected-filter chips under the filter row.
+  - Add Teacher button now opens the form through the existing Owner dashboard route with `view=teacher-add`, avoiding stale dev-server route-cache 404s while keeping the direct `/dashboard/owner/teacher/add` route available.
+  - Verification: `npm run lint`, `npm run build`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Add Teacher photo and subject selector:
+  - Add Teacher form profile photo picker now matches the Add New Branch circular upload control, including the top-right circular remove button.
+  - Replaced Add Teacher subject chips with a multi-select dropdown labeled `Chose 1 or more Subject`; selected subjects are still submitted as separate `subjects` form values and at least one subject remains required.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Teacher status and filter row polish:
+  - Owner-created teachers now become `active` automatically when a salary model is submitted; non-owner teacher creation cannot submit salary data and remains pending for Owner review.
+  - Added migration `202605040002_activate_salary_model_teachers.sql` to activate already-created pending teachers that already have salary models.
+  - Teacher Finance & HR Reset Filter button now sits in the same filter row and uses the same 44px control height as the filter selects.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-04 Branch Detail photo control polish:
+  - Branch Detail profile photo now uses the same circular upload control as Add New Branch.
+  - Removed the separate `Edit photo` and `Remove photo` buttons; selecting/changing happens by clicking the photo circle, and removing uses the circular top-right `X`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Teacher edit flow:
+  - Teacher Finance & HR row Edit now opens the existing Add Teacher form in edit mode at `view=teacher-edit&teacher_id=...`.
+  - The edit form is prefilled with teacher profile, login email/name, branch, subjects, profile photo, and the latest salary model.
+  - Save updates teacher profile/login/subjects/photo through `PATCH /v1/teachers/{teacher_id}` and writes a fresh salary model; pending teachers become active after salary is saved.
+  - Updated frontend API types/client, OpenAPI, and frontend contract for teacher update.
+  - Verification: `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, `npm run lint`, `npm run build`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Teacher Finance filter/sidebar polish:
+  - Teacher Finance & HR filter card now only shows the extra chip row when at least one filter is selected, so the card stays shorter with no active filters.
+  - Sidebar Dashboard active state now only applies when no Owner sub-view is selected, fixing double-active Dashboard + Teacher Finance highlighting after window focus changes.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-04 Receptionist Management foundation:
+  - Removed the Staff Management UI from Branch Detail; the backend staff endpoints remain available.
+  - Added Owner sidebar routing for `Receptionist Management` at `view=receptionists`.
+  - Added a Receptionist Management page with Teacher Finance-style header/filters, selected-filter chips, card-based receptionist list, Active/Inactive status changing, hard Delete, and Add/Edit Staff form.
+  - Receptionist form now supports circular profile photo upload, branch assignment, name/surname, DD/MM/YYYY birth and hire dates, gender, phone, address, Manat salary, live email availability, and password visibility.
+  - Extended receptionist backend persistence with gender, address, hire date, active status, and last login tracking; `PATCH /v1/staff/{staff_id}` can update status and branch assignment, while `DELETE /v1/staff/{staff_id}` remains a hard delete.
+  - Add Teacher form fields now use consistent 44px control height, and Phone/Address were moved directly after Birth Date/Gender.
+  - Verification: `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, `npm run lint`, and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist Management list/edit polish:
+  - Replaced the Receptionist Management filter card with Dashboard-style rounded branch pills; `All Branches` is selected by default.
+  - Changed Existing Receptionists from card grid to single-line rows showing profile photo, full name, status, assigned branch, working hours, salary, and icon-only edit/delete actions.
+  - Edit now expands the selected row and renders the edit form inside that row instead of opening a separate form area.
+  - Delete now uses a two-step confirmation: exact receptionist full-name confirmation first, then a permanent-delete impact warning before hard delete.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist Management save/animation fix:
+  - Add Staff save is now guarded with client-side photo size validation and a `try/catch` around the server action, so failed saves show the existing UI error instead of a white screen.
+  - Added row expansion, edit panel, and profile-photo morph animations for receptionist inline edit.
+  - Replaced the salary icon rendering with a safe Unicode escape to avoid console/encoding corruption.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Receptionist Add Staff photo/save polish:
+  - Replaced the Add Staff profile photo picker with the same circular upload control used in the Add New Branch drawer, including selected-image preview and top-right remove button.
+  - Verified the backend staff create/delete endpoint with a direct local API smoke; valid receptionist payloads save correctly.
+  - Staff create/update actions now map backend `400 invalid input` to the receptionist form validation message instead of the generic save failure.
+  - Added strict client/server-action DD/MM/YYYY calendar validation so impossible dates are blocked before save.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist hire-date validation:
+  - Added frontend and server-action validation that receptionist hire date cannot be earlier than birth date.
+  - Added backend service validation for the same rule so direct API calls cannot bypass it.
+  - The form now shows a specific user-facing message when hire date is before birth date.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Receptionist delete dialog label fix:
+  - Added the missing Receptionist Management delete confirmation labels to `en.json`.
+  - Added a small fallback around the delete confirmation text to prevent a runtime crash if a translation key is missing.
+- 2026-05-04 Receptionist row layout and edit animation:
+  - Existing Receptionists rows now use the requested order: Profile, Gender, Branch, Status, Working Hours, Actions.
+  - Status is now a read-only badge in the row instead of a dropdown; status editing remains inside the expanded edit form.
+  - Removed salary from the row and balanced the grid columns for more even spacing.
+  - Added row-cell and form-field morph animations so profile/gender/branch/status/working-hours visually transition into the expanded form.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist shared-element edit flow:
+  - Added `framer-motion` to the frontend and replaced the old CSS-only receptionist edit morph with shared `layoutId` transitions.
+  - Existing Receptionists rows now use the requested order: Profile, Gender, Branch, Working Hours, Salary, Status, Actions.
+  - Inline edit opens from the summary row or Edit button; avatar/name/branch/gender/hours/salary/status move into the form, while extra fields fade in with a slight upward motion.
+  - Opening an edit row now smooth-scrolls the row into view.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist edit transition tuning:
+  - Softened the shared-element transition by lowering spring stiffness and increasing reveal duration, so receptionist edit elements move into place less sharply.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist edit blank-gap fix:
+  - Fixed the intermittent blank space when opening receptionist edit by replacing separate summary/form animation wrappers with one `AnimatePresence` slot.
+  - The edit form now immediately takes over the row area while shared elements move into place.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist video review animation fix:
+  - Reviewed the supplied edit open/close recording and adjusted the receptionist row animation to prevent the form container itself from sliding upward into place.
+  - Added a layout wrapper around the card height transition and changed summary/editor enter-exit motion to opacity-only; shared elements still move with `layoutId`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist cancel transition fix:
+  - Removed parent fade transitions from the receptionist summary/editor swap so Cancel can animate shared elements back into the row instead of making the form disappear first.
+  - The outer card still handles height/layout movement; common row/form elements keep using shared `layoutId`.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist opening jump fix:
+  - Prevented the receptionist edit card from animating its position upward/back by changing row/card layout animation to size-only.
+  - Delayed and gated the edit auto-scroll so it only runs when the expanded card is actually outside the visible viewport.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist shared transition reset:
+  - Removed `AnimatePresence/popLayout` from the receptionist summary/editor swap because it was interrupting reverse shared-element motion on Cancel.
+  - The row now switches summary/form in the same render cycle so avatar/name/branch/gender/hours/salary/status can animate both directions.
+  - Auto-scroll now only runs when the row top is hidden above the header, avoiding scroll-induced up/down movement when opening the form.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close video fix:
+  - Reviewed the close-only recording and restored `AnimatePresence` without `popLayout` so exiting form elements and entering row elements can be measured together.
+  - This keeps the opening behavior while allowing shared `layoutId` elements to animate back into the summary row on Cancel.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist two-phase close fix:
+  - Reworked Cancel into a two-phase close: the expanded card height is temporarily locked, the summary row enters its real position, and the exiting form is popped out of layout so it cannot push the row underneath it.
+  - After the shared-element return animation completes, the height lock is released and the parent edit state is cleared.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close ghost cleanup:
+  - Adjusted the Cancel flow so the summary row does not enter layout immediately; the edit form first hides non-shared fields, then shared avatar/name/branch/gender/hours/salary/status elements return to the row.
+  - Added closing-only fade-out behavior for extra form fields, errors, photo remove button, and action buttons to remove the ghost form effect while keeping the existing opening animation unchanged.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist exit layer ghost fix:
+  - Hid the exiting edit-form presence layer immediately during Cancel so the old form cannot visually re-close after the row has already returned.
+  - This keeps the existing opening animation path unchanged and only affects the form exit layer during close.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close height-collapse sync:
+  - Synced the expanded row height collapse with the summary-row return by animating the locked shell height down to the summary height during Cancel.
+  - Added a typed shell-collapse transition so the line should not return first and then show a second ghost-like form collapse.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close duration tuning:
+  - Slightly slowed the receptionist edit close sequence: non-shared field fade-out now lasts 0.22s, shell collapse lasts 0.56s, and the close cleanup timeout was extended to 920ms.
+  - Opening behavior was not changed.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Teacher Finance table avatar fix:
+  - Added `profile_photo_file_id` to Teacher Finance records in backend domain/Postgres/memory store output.
+  - Frontend now resolves Teacher Finance profile-photo file ids to download URLs and renders them in the table avatar with initials fallback.
+  - Updated API contract/OpenAPI docs for the new Teacher Finance profile photo reference.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-05 Student & Assignment Hub:
+  - User requested merging Owner sidebar `Student Management` and `Assignment & Swap` into one `Student & Assignment Hub`.
+  - Decision: keep existing granular `/v1/students`, class enrollment, and assignment endpoints because they are still needed for create/detail/action workflows; add a new read-only hub list endpoint for the combined table.
+  - Backend: added `StudentAssignmentHubRecord/Page/Filter`, memory/Postgres store implementations, service validation, `GET /v1/student-assignment-hub`, and a migration allowing `graduated` while keeping `left` instead of `paused`.
+  - Frontend: merged Owner sidebar items into `Student & Assignment Hub`, added the hub page with branch/status/teacher/search filters, Teacher Finance-style filter chips, sticky table header, loading row, row-count selector, and 3-page pagination window.
+  - Actions column currently shows Edit and Quick Assign/Swap icons only; behavior is intentionally left for the next instruction.
+  - Updated `backend/api/openapi.yaml` and `backend/api/frontend-contract.md`.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-05 Owner UI polish:
+  - Increased Branch Management, Teacher Finance & HR, and Student & Assignment Hub primary add buttons to 38px height.
+  - Dashboard metric card icons now use Kingsway red in light and dark mode.
+  - Moved the AppShell profile menu from the header to the bottom of the sidebar while keeping the profile menu in sidebar-less onboarding screens.
+  - Sign Out hover/highlight now turns both the text and icon red.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-06 Owner login branch screen removal:
+  - Removed the Owner first-login branch setup / branch selection gate from the dashboard route.
+  - Owner `/dashboard/owner` now opens directly to the global dashboard with `All Branches` active; branches can still be created and managed from `Branch Management`.
+  - Sidebar Dashboard active state now works for the direct Owner dashboard URL without requiring `branch_id=all`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-06 Add Student flow:
+  - Connected `+ Add Student` in Student & Assignment Hub to `?view=student-add` and kept the sidebar item active on that form.
+  - Added the Add Student form UI with Add Teacher-style circular profile photo upload, name/surname, 7-character FIN, birth date, gender/address, phone, optional dynamic parent contacts, branch assignment, multi-course selection, per-course teacher/monthly payment, start date, email live availability, password visibility, Cancel, and Save.
+  - Backend student creation now supports profile fields, parent contacts, course registrations, optional direct teacher assignment, monthly payment per course, and student profile-photo file references; `PATCH /v1/students/{student_id}` is available for profile-photo updates after upload.
+  - Student Hub rows now resolve and render student profile photos when present; API contract/OpenAPI docs were updated for the Add Student payload.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-06 Write integrity and multi-submit protection:
+  - Added backend idempotency support for authenticated JSON `POST` create/write endpoints via `Idempotency-Key`; repeated same key/body returns the first successful response, while same key with different body returns conflict.
+  - Added the `idempotency_keys` migration table and allowed `Idempotency-Key` in CORS.
+  - Student create is now transaction-backed for the student row, parent contacts, course registrations, and initial teacher assignment so a partial DB save does not survive a failure.
+  - Confirmed DB-level uniqueness for duplicate-sensitive rows such as student FIN and student/course registrations.
+  - Frontend create/save buttons now lock immediately on first click and forms send idempotency keys for Add Branch, Branch Detail room additions, Add/Edit Teacher salary creation, Add Student, and Receptionist create/edit flows.
+  - The UI still only treats a submit as successful after the backend returns success; otherwise the form stays open with the existing user-friendly error message.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, targeted backend package tests, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, and `git diff --check` passed. `go test ./...` was blocked only for `internal/files` by Windows Application Control policy. Docker was not used.
+- 2026-05-07 System verification:
+  - Rechecked current write-integrity status: idempotency and transaction protection are in place for current create/save flows, while full business state-machine rules still need to be added per critical module such as online exams, payments, attendance, and assignment/swap.
+  - Verification passed with Docker disabled: backend `go test ./...` using workspace `GOTMPDIR`, backend `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, frontend `npm run lint`, frontend `npm run build`, and `git diff --check`.
+- 2026-05-07 Backend startup migration fix:
+  - Fixed local backend startup by adding the missing Goose `-- +goose Up/Down` markers to `backend/migrations/202605060002_write_integrity_idempotency.sql`.
+  - Removed the redundant student/course unique-index creation from that migration because `202605060001_student_profile_registration_fields.sql` already defines `UNIQUE (student_id, course_id)`.
+  - Root cause of the terminal failure: the backend built successfully, but the startup migration runner rejected the idempotency migration before opening port `8080`.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, frontend `npm run lint`, frontend `npm run build`, `git diff --check`, `tools/start-local-dev.ps1`, and `GET http://127.0.0.1:8080/healthz`.
+- 2026-05-07 Submit lock regression fix:
+  - Fixed Teacher edit, Branch Detail, Add Branch, Add Teacher, and Add Student submit buttons by replacing the copied immediate `onClick -> setLocked(true)` guard with shared `frontend/src/lib/forms/use-submit-lock.ts`.
+  - Root cause: the previous double-submit guard disabled the clicked submit button during the same click event, which could cancel the first browser form submit. The button then looked disabled while no backend request was sent.
+  - The new guard lets the first submit proceed, locks only after the browser has started submission, blocks rapid repeated clicks, and auto-unlocks if the form never enters pending state.
+  - Verification passed with Docker disabled: `npm run lint`, `npm run build`, `git diff --check`, and HTTP 200 checks for Teacher Finance and Branch Management dashboard pages.
+- 2026-05-07 One-command regression gate:
+  - Added root `check-kingsway.cmd`, which runs `tools/check-kingsway.ps1`.
+  - The check command now runs backend `go test ./...`, backend build, frontend `npm run lint`, frontend `npm run build`, `git diff --check`, local backend/frontend health checks, and Owner E2E smoke tests.
+  - Added Playwright with system Chrome/Edge channel support, `frontend/playwright.config.ts`, and `frontend/e2e/owner-smoke.spec.ts`.
+  - The Owner smoke test logs in as the default local owner, creates a temporary branch, verifies Branch Detail Save, creates and edits a teacher, creates a student, checks Student & Assignment Hub, and then deletes the temporary branch.
+  - Added `frontend/test-results/` and `frontend/playwright-report/` to `.gitignore`.
+  - Verification passed with Docker disabled: `.\check-kingsway.cmd` completed successfully.
 
 ## Next Steps
 
-1. Continue frontend implementation from the role dashboard shell.
-2. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
-3. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.
+1. If strict WebP storage is required for profile photos, replace the current JPEG profile-photo encoder with a backend WebP encoder and update the existing file optimizer tests.
+2. Implement Student & Assignment Hub action buttons: Edit and Quick Assign/Swap behavior.
+3. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
+4. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.

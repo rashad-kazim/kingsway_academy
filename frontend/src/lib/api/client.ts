@@ -1,23 +1,41 @@
 import type {
   Branch,
+  Course,
   CreateBranchInput,
+  CreateStudentAccountInput,
+  CreateStudentInput,
+  CreateSalaryModelInput,
+  CreateTeacherInput,
+  CreateTeacherResult,
   CreateRoomInput,
   CreateStaffInput,
   DashboardRecord,
   DownloadURLResult,
+  EmailAvailability,
   FileObject,
   LoginResult,
   Role,
   Room,
+  SalaryModel,
   Session,
   StaffMember,
+  Student,
+  StudentAssignmentHubFilters,
+  StudentAssignmentHubPage,
+  Teacher,
+  TeacherFinanceFilters,
+  TeacherFinanceRecord,
   UpdateBranchInput,
+  UpdateRoomInput,
   UpdateStaffInput,
+  UpdateStudentInput,
+  UpdateTeacherInput,
 } from "./types";
 
 type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   token?: string;
+  idempotencyKey?: string;
 };
 
 export class ApiError extends Error {
@@ -45,6 +63,9 @@ export async function apiFetch<T>(
   }
   if (!headers.has("X-Request-ID")) {
     headers.set("X-Request-ID", crypto.randomUUID());
+  }
+  if (options.idempotencyKey && !headers.has("Idempotency-Key")) {
+    headers.set("Idempotency-Key", options.idempotencyKey);
   }
 
   const response = await fetch(backendURL(path), {
@@ -87,10 +108,15 @@ export function listBranches(token: string) {
   return apiFetch<Branch[]>("/v1/branches", { token });
 }
 
-export function createBranch(input: CreateBranchInput, token: string) {
+export function createBranch(
+  input: CreateBranchInput,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<Branch>("/v1/branches", {
     method: "POST",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -119,10 +145,15 @@ export function listRooms(token: string, branchId?: string) {
   return apiFetch<Room[]>(`/v1/rooms${query}`, { token });
 }
 
-export function createRoom(input: CreateRoomInput, token: string) {
+export function createRoom(
+  input: CreateRoomInput,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<Room>("/v1/rooms", {
     method: "POST",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -134,6 +165,18 @@ export function deleteRoom(roomId: string, token: string) {
   });
 }
 
+export function updateRoom(
+  roomId: string,
+  input: UpdateRoomInput,
+  token: string,
+) {
+  return apiFetch<Room>(`/v1/rooms/${roomId}`, {
+    method: "PATCH",
+    token,
+    body: input,
+  });
+}
+
 export function listBranchStaff(branchId: string, token: string) {
   return apiFetch<StaffMember[]>(`/v1/branches/${branchId}/staff`, { token });
 }
@@ -142,10 +185,12 @@ export function createBranchStaff(
   branchId: string,
   input: CreateStaffInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<StaffMember>(`/v1/branches/${branchId}/staff`, {
     method: "POST",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -169,6 +214,149 @@ export function deleteStaff(staffId: string, token: string) {
   });
 }
 
+export function listTeacherFinanceRecords(
+  filters: TeacherFinanceFilters,
+  token: string,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+  const query = params.toString();
+  return apiFetch<TeacherFinanceRecord[]>(
+    `/v1/teacher-finance${query ? `?${query}` : ""}`,
+    { token },
+  );
+}
+
+export function listStudentAssignmentHub(
+  filters: StudentAssignmentHubFilters,
+  token: string,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+  const query = params.toString();
+  return apiFetch<StudentAssignmentHubPage>(
+    `/v1/student-assignment-hub${query ? `?${query}` : ""}`,
+    { token },
+  );
+}
+
+export function listCourses(token: string, branchId?: string) {
+  const query = branchId ? `?branch_id=${encodeURIComponent(branchId)}` : "";
+  return apiFetch<Course[]>(`/v1/courses${query}`, { token });
+}
+
+export function createStudent(
+  input: CreateStudentInput,
+  token: string,
+  idempotencyKey?: string,
+) {
+  return apiFetch<Student>("/v1/students", {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: input,
+  });
+}
+
+export function updateStudent(
+  studentId: string,
+  input: UpdateStudentInput,
+  token: string,
+) {
+  return apiFetch<Student>(`/v1/students/${studentId}`, {
+    method: "PATCH",
+    token,
+    body: input,
+  });
+}
+
+export function createStudentAccount(
+  studentId: string,
+  input: CreateStudentAccountInput,
+  token: string,
+  idempotencyKey?: string,
+) {
+  return apiFetch<{ student: Student; user: unknown }>(
+    `/v1/students/${studentId}/account`,
+    {
+      method: "POST",
+      token,
+      idempotencyKey,
+      body: input,
+    },
+  );
+}
+
+export function deleteTeacher(teacherId: string, token: string) {
+  return apiFetch<Teacher>(`/v1/teachers/${teacherId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export function getTeacher(teacherId: string, token: string) {
+  return apiFetch<Teacher>(`/v1/teachers/${teacherId}`, { token });
+}
+
+export function createTeacher(
+  input: CreateTeacherInput,
+  token: string,
+  idempotencyKey?: string,
+) {
+  return apiFetch<CreateTeacherResult>("/v1/teachers", {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: input,
+  });
+}
+
+export function updateTeacher(
+  teacherId: string,
+  input: UpdateTeacherInput,
+  token: string,
+) {
+  return apiFetch<Teacher>(`/v1/teachers/${teacherId}`, {
+    method: "PATCH",
+    token,
+    body: input,
+  });
+}
+
+export function listSalaryModels(token: string, branchId?: string) {
+  const query = branchId ? `?branch_id=${encodeURIComponent(branchId)}` : "";
+  return apiFetch<SalaryModel[]>(`/v1/salary-models${query}`, { token });
+}
+
+export function createSalaryModel(
+  input: CreateSalaryModelInput,
+  token: string,
+  idempotencyKey?: string,
+) {
+  return apiFetch<SalaryModel>("/v1/salary-models", {
+    method: "POST",
+    token,
+    idempotencyKey,
+    body: input,
+  });
+}
+
+export function checkEmailAvailability(email: string, token: string) {
+  const params = new URLSearchParams({ email });
+  return apiFetch<EmailAvailability>(
+    `/v1/users/email-availability?${params.toString()}`,
+    { token },
+  );
+}
+
 export function uploadBranchPhoto(
   branchId: string,
   photo: File,
@@ -178,6 +366,27 @@ export function uploadBranchPhoto(
   formData.set("branch_id", branchId);
   formData.set("owner_type", "branch");
   formData.set("owner_id", branchId);
+  formData.set("category", "standard");
+  formData.set("purpose", "profile_photo");
+  formData.set("file", photo);
+
+  return apiFetch<FileObject>("/v1/files/upload", {
+    method: "POST",
+    token,
+    body: formData,
+  });
+}
+
+export function uploadTeacherPhoto(
+  branchId: string,
+  teacherId: string,
+  photo: File,
+  token: string,
+) {
+  const formData = new FormData();
+  formData.set("branch_id", branchId);
+  formData.set("owner_type", "teacher");
+  formData.set("owner_id", teacherId);
   formData.set("category", "standard");
   formData.set("purpose", "profile_photo");
   formData.set("file", photo);
@@ -199,6 +408,27 @@ export function uploadStaffPhoto(
   formData.set("branch_id", branchId);
   formData.set("owner_type", "staff");
   formData.set("owner_id", staffId);
+  formData.set("category", "standard");
+  formData.set("purpose", "profile_photo");
+  formData.set("file", photo);
+
+  return apiFetch<FileObject>("/v1/files/upload", {
+    method: "POST",
+    token,
+    body: formData,
+  });
+}
+
+export function uploadStudentPhoto(
+  branchId: string,
+  studentId: string,
+  photo: File,
+  token: string,
+) {
+  const formData = new FormData();
+  formData.set("branch_id", branchId);
+  formData.set("owner_type", "student");
+  formData.set("owner_id", studentId);
   formData.set("category", "standard");
   formData.set("purpose", "profile_photo");
   formData.set("file", photo);

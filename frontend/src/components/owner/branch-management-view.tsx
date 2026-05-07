@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   useActionState,
   type ChangeEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -20,6 +21,8 @@ import {
   Clock,
   CircleDollarSign,
   DoorOpen,
+  Eye,
+  EyeOff,
   ImagePlus,
   KeyRound,
   Mail,
@@ -33,6 +36,7 @@ import {
   Upload,
   UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -94,6 +98,7 @@ import {
   type StaffManagementState,
 } from "@/lib/owner/actions";
 import type { StaffMember } from "@/lib/api/types";
+import { useSubmitLock } from "@/lib/forms/use-submit-lock";
 import type { BranchStats } from "./owner-branch-workspace";
 
 export type BranchManagementLabels = {
@@ -120,6 +125,7 @@ export type BranchManagementLabels = {
   delete: string;
   manageRooms: string;
   deleteBranchTitle: string;
+  deleteBranchIrreversibleWarning: string;
   deleteBranchDescription: string;
   deleteBranchNameLabel: string;
   deleteBranchNamePlaceholder: string;
@@ -153,6 +159,8 @@ export type BranchManagementLabels = {
   existingRooms: string;
   pendingRooms: string;
   removeRoom: string;
+  deleteRoomTitle: string;
+  deleteRoomWarningDescription: string;
   currentBranchName: string;
   currentAddress: string;
   operationalHours: string;
@@ -184,6 +192,8 @@ export type BranchManagementLabels = {
   salary: string;
   email: string;
   password: string;
+  showPassword: string;
+  hidePassword: string;
   receptionist: string;
   staffSaveError: string;
   staffDuplicateError: string;
@@ -233,6 +243,9 @@ export function BranchManagementView({
     createBranchAction,
     initialCreateState,
   );
+  const [createIdempotencyKey, setCreateIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
   const roomsByBranch = useMemo(() => groupRoomsByBranch(rooms), [rooms]);
   const staffByBranch = useMemo(() => groupStaffByBranch(staff), [staff]);
   const visibleBranches = useMemo(
@@ -265,6 +278,7 @@ export function BranchManagementView({
     window.queueMicrotask(() => {
       setCreateOpen(false);
       setCreateBranchName("");
+      setCreateIdempotencyKey(crypto.randomUUID());
       clearCreatePhotoPreview();
       router.refresh();
     });
@@ -337,7 +351,6 @@ export function BranchManagementView({
           setSelectedBranch(null);
         }}
         rooms={roomsByBranch.get(selectedBranch.id) ?? []}
-        staff={staff.filter((member) => member.branch_id === selectedBranch.id)}
         branches={visibleBranches}
       />
     );
@@ -354,7 +367,7 @@ export function BranchManagementView({
         </div>
         <Sheet open={createOpen} onOpenChange={handleCreateOpenChange}>
           <SheetTrigger asChild>
-            <Button className="gap-2 rounded-lg bg-[#ef2334] px-5 font-bold text-white shadow-[0_12px_26px_rgba(239,35,52,0.28)] transition hover:bg-[#d91f30]">
+            <Button className="h-[38px] gap-2 rounded-lg bg-[#ef2334] px-5 font-bold text-white shadow-[0_12px_26px_rgba(239,35,52,0.28)] transition hover:bg-[#d91f30]">
               <Plus className="size-4" />
               {labels.addNewBranch}
             </Button>
@@ -367,28 +380,45 @@ export function BranchManagementView({
               <SheetDescription>{labels.addBranchDescription}</SheetDescription>
             </SheetHeader>
             <form action={createFormAction} className="space-y-5 p-6">
+              <input
+                name="idempotency_key"
+                type="hidden"
+                value={createIdempotencyKey}
+              />
               <div className="space-y-3">
                 <Label>{labels.branchPhoto}</Label>
-                <label className="group mx-auto flex size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-[#b9c5d6] bg-[#f7f8fb] text-[#0a284b] shadow-inner transition hover:border-[#ef2334] hover:bg-[#f1f4f8] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:bg-[#263448]">
-                  {createPhotoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt=""
-                      className="size-full object-cover"
-                      src={createPhotoPreview}
+                <div className="relative mx-auto size-36">
+                  <label className="group flex size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-[#b9c5d6] bg-[#f7f8fb] text-[#0a284b] shadow-inner transition hover:border-[#ef2334] hover:bg-[#f1f4f8] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:bg-[#263448]">
+                    {createPhotoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt=""
+                        className="size-full object-cover"
+                        src={createPhotoPreview}
+                      />
+                    ) : (
+                      <ImagePlus className="size-8 transition-transform group-hover:scale-110" />
+                    )}
+                    <input
+                      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                      className="sr-only"
+                      name="photo"
+                      onChange={handleCreatePhotoChange}
+                      ref={createFileInputRef}
+                      type="file"
                     />
-                  ) : (
-                    <ImagePlus className="size-8 transition-transform group-hover:scale-110" />
-                  )}
-                  <input
-                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                    className="sr-only"
-                    name="photo"
-                    onChange={handleCreatePhotoChange}
-                    ref={createFileInputRef}
-                    type="file"
-                  />
-                </label>
+                  </label>
+                  {createPhotoPreview ? (
+                    <button
+                      aria-label={labels.removePhoto}
+                      className="absolute right-0 top-0 grid size-8 cursor-pointer place-items-center rounded-full bg-[#ef2334] text-white shadow-lg ring-4 ring-white transition hover:bg-[#d91f30] dark:bg-[#ff3b4f] dark:ring-[#1b2635] dark:hover:bg-[#ff5a69]"
+                      type="button"
+                      onClick={clearCreatePhotoPreview}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  ) : null}
+                </div>
                 <CreateError
                   state={createState}
                   labels={labels}
@@ -493,8 +523,10 @@ export function BranchManagementView({
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/40 bg-[#eef3f8] hover:bg-[#eef3f8] dark:border-white/10 dark:bg-[#202b3a] dark:hover:bg-[#202b3a]">
-                <TableHead className="px-5">{labels.branchProfile}</TableHead>
+              <TableRow className="h-14 border-white/40 bg-[#eef3f8] hover:bg-[#eef3f8] dark:border-white/10 dark:bg-[#202b3a] dark:hover:bg-[#202b3a]">
+                <TableHead className="px-5 py-4">
+                  {labels.branchProfile}
+                </TableHead>
                 <TableHead>{labels.address}</TableHead>
                 <TableHead>{labels.rooms}</TableHead>
                 <TableHead>{labels.staff}</TableHead>
@@ -515,7 +547,7 @@ export function BranchManagementView({
                     key={branch.id}
                     onClick={() => setSelectedBranch(branch)}
                   >
-                    <TableCell className="px-5">
+                    <TableCell className="px-5 py-5">
                       <div className="flex items-center gap-3">
                         <BranchProfileAvatar branch={branch} />
                         <div className="min-w-0">
@@ -528,7 +560,7 @@ export function BranchManagementView({
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[320px]">
+                    <TableCell className="max-w-[320px] py-5">
                       <div className="flex items-center gap-2 text-[#59667a] dark:text-[#a7b0bf]">
                         <MapPin className="size-4 shrink-0 text-[#ef2334] dark:text-[#ff3b4f]" />
                         <span className="truncate">
@@ -536,22 +568,22 @@ export function BranchManagementView({
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-semibold">
+                    <TableCell className="py-5 font-semibold">
                       {branchRooms.length} {labels.rooms}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-5">
                       <StaffCell
                         label={labels.unassigned}
                         receptionistLabel={labels.receptionist}
                         staff={branchStaff}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-5">
                       <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
                         {labels.active}
                       </Badge>
                     </TableCell>
-                    <TableCell className="pr-5 text-right">
+                    <TableCell className="py-5 pr-5 text-right">
                       <BranchActions
                         branch={branch}
                         labels={labels}
@@ -589,7 +621,6 @@ function BranchDetailPage({
   onCancel,
   onSaved,
   rooms,
-  staff,
 }: {
   branch: Branch;
   branches: Branch[];
@@ -597,7 +628,6 @@ function BranchDetailPage({
   onCancel: () => void;
   onSaved: (branch: Branch) => void;
   rooms: Room[];
-  staff: StaffMember[];
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -606,6 +636,7 @@ function BranchDetailPage({
     saveBranchManagementAction,
     initialSaveState,
   );
+  const saveIdempotencyKey = useMemo(() => crypto.randomUUID(), []);
   const [branchNameValue, setBranchNameValue] = useState(branch.name);
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoRemoved, setPhotoRemoved] = useState(false);
@@ -614,10 +645,19 @@ function BranchDetailPage({
   const [roomCapacity, setRoomCapacity] = useState("1");
   const [editingRoomID, setEditingRoomID] = useState<string | null>(null);
   const [pendingRooms, setPendingRooms] = useState<RoomDraft[]>([]);
+  const [updatedRooms, setUpdatedRooms] = useState<RoomDraft[]>([]);
   const [removedRoomIDs, setRemovedRoomIDs] = useState<string[]>([]);
   const visibleRooms = rooms.filter(
     (room) => !removedRoomIDs.includes(room.id),
+  ).map(
+    (room) => {
+      const updated = updatedRooms.find((item) => item.id === room.id);
+      return updated
+        ? { ...room, capacity: updated.capacity, name: updated.name }
+        : room;
+    },
   );
+  const [roomDeleteTarget, setRoomDeleteTarget] = useState<Room | null>(null);
   const selectedPhoto = photoRemoved
     ? ""
     : photoPreview || branch.photo_url || "";
@@ -707,12 +747,25 @@ function BranchDetailPage({
       return;
     }
     const capacity = Math.max(1, Number.parseInt(roomCapacity, 10) || 1);
-    if (editingRoomID) {
+    if (
+      editingRoomID &&
+      pendingRooms.some((room) => room.id === editingRoomID)
+    ) {
       setPendingRooms((current) =>
         current.map((room) =>
           room.id === editingRoomID ? { ...room, capacity, name } : room,
         ),
       );
+    } else if (
+      editingRoomID &&
+      rooms.some((room) => room.id === editingRoomID)
+    ) {
+      setUpdatedRooms((current) => {
+        const nextRoom = { id: editingRoomID, capacity, name };
+        return current.some((room) => room.id === editingRoomID)
+          ? current.map((room) => (room.id === editingRoomID ? nextRoom : room))
+          : [...current, nextRoom];
+      });
     } else {
       setPendingRooms((current) => [
         ...current,
@@ -732,6 +785,11 @@ function BranchDetailPage({
   return (
     <form action={saveFormAction} className="space-y-6">
       <input name="branch_id" type="hidden" value={branch.id} />
+      <input
+        name="idempotency_key"
+        type="hidden"
+        value={saveIdempotencyKey}
+      />
       <input
         name="photo_file_id"
         type="hidden"
@@ -756,6 +814,11 @@ function BranchDetailPage({
         name="removed_room_ids"
         type="hidden"
         value={JSON.stringify(removedRoomIDs)}
+      />
+      <input
+        name="updated_rooms"
+        type="hidden"
+        value={JSON.stringify(updatedRooms)}
       />
 
       <section className="flex flex-wrap items-center justify-between gap-3">
@@ -790,8 +853,8 @@ function BranchDetailPage({
       <Card className="rounded-xl border-[#dce3ee] bg-white/80 shadow-[0_24px_70px_rgba(10,40,75,0.12)] backdrop-blur-xl dark:border-[#3a4658] dark:bg-[#1b2635]">
         <CardContent className="space-y-8 p-6">
           <section className="flex flex-col items-center gap-4">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative grid size-36 place-items-center overflow-hidden rounded-full border border-dashed border-[#b9c5d6] bg-[#eef2f7] dark:border-[#414d60] dark:bg-[#2a3444]">
+            <div className="relative size-36">
+              <label className="group flex size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-[#b9c5d6] bg-[#f7f8fb] text-[#0a284b] shadow-inner transition hover:border-[#ef2334] hover:bg-[#f1f4f8] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:bg-[#263448]">
                 {selectedPhoto ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -800,39 +863,27 @@ function BranchDetailPage({
                     src={selectedPhoto}
                   />
                 ) : (
-                  <span className="text-4xl font-black text-[#0a284b] dark:text-[#f3f6fa]">
-                    {branchInitials(branch.name)}
-                  </span>
+                  <ImagePlus className="size-8 transition-transform group-hover:scale-110" />
                 )}
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button
-                  className="gap-2"
-                  onClick={() => fileInputRef.current?.click()}
+                <input
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  className="sr-only"
+                  name="photo"
+                  onChange={handlePhotoChange}
+                  ref={fileInputRef}
+                  type="file"
+                />
+              </label>
+              {selectedPhoto ? (
+                <button
+                  aria-label={labels.removePhoto}
+                  className="absolute right-0 top-0 grid size-8 cursor-pointer place-items-center rounded-full bg-[#ef2334] text-white shadow-lg ring-4 ring-white transition hover:bg-[#d91f30] dark:bg-[#ff3b4f] dark:ring-[#1b2635] dark:hover:bg-[#ff5a69]"
                   type="button"
-                  variant="outline"
-                >
-                  <Upload className="size-4" />
-                  {labels.editPhoto}
-                </Button>
-                <Button
-                  className="gap-2 text-[#ef2334] hover:text-[#ef2334] dark:text-[#ff3b4f] dark:hover:text-[#ff3b4f]"
                   onClick={removePhoto}
-                  type="button"
-                  variant="outline"
                 >
-                  <Trash2 className="size-4" />
-                  {labels.removePhoto}
-                </Button>
-              </div>
-              <input
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                className="sr-only"
-                name="photo"
-                onChange={handlePhotoChange}
-                ref={fileInputRef}
-                type="file"
-              />
+                  <X className="size-4" />
+                </button>
+              ) : null}
             </div>
           </section>
 
@@ -900,12 +951,6 @@ function BranchDetailPage({
         </CardContent>
       </Card>
 
-      <StaffManagementSection
-        branchID={branch.id}
-        initialStaff={staff}
-        labels={labels}
-      />
-
       <Card className="rounded-xl border-[#dce3ee] bg-white/80 shadow-[0_24px_70px_rgba(10,40,75,0.12)] backdrop-blur-xl dark:border-[#3a4658] dark:bg-[#1b2635]">
         <CardContent className="space-y-5 p-6">
           <div className="flex items-center gap-2 font-black">
@@ -914,13 +959,16 @@ function BranchDetailPage({
           </div>
 
           <RoomList
+            editLabel={labels.edit}
             emptyLabel={labels.noRooms}
             label={labels.existingRooms}
-            onRemove={(id) =>
-              setRemovedRoomIDs((current) =>
-                current.includes(id) ? current : [...current, id],
-              )
-            }
+            onEdit={(room) => {
+              setEditingRoomID(room.id);
+              setRoomName(room.name);
+              setRoomCapacity(String(room.capacity));
+              setAddRoomOpen(true);
+            }}
+            onRemove={setRoomDeleteTarget}
             removeLabel={labels.removeRoom}
             rooms={visibleRooms}
           />
@@ -1019,6 +1067,53 @@ function BranchDetailPage({
           />
         </CardContent>
       </Card>
+      <Dialog
+        open={Boolean(roomDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRoomDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="z-[1200] border-[#dce3ee] dark:border-[#3a4658] dark:bg-[#1b2635] dark:text-[#f3f6fa]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">
+              {labels.deleteRoomTitle}
+            </DialogTitle>
+            <DialogDescription className="text-[#59667a] dark:text-[#cbd5e1]">
+              {labels.deleteRoomWarningDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="bg-transparent px-0 pb-0">
+            <Button
+              onClick={() => setRoomDeleteTarget(null)}
+              type="button"
+              variant="outline"
+            >
+              {labels.cancel}
+            </Button>
+            <Button
+              className="bg-[#8f1020] text-white hover:bg-[#74101d]"
+              onClick={() => {
+                if (roomDeleteTarget) {
+                  setRemovedRoomIDs((current) =>
+                    current.includes(roomDeleteTarget.id)
+                      ? current
+                      : [...current, roomDeleteTarget.id],
+                  );
+                  setUpdatedRooms((current) =>
+                    current.filter((room) => room.id !== roomDeleteTarget.id),
+                  );
+                }
+                setRoomDeleteTarget(null);
+              }}
+              type="button"
+            >
+              {labels.delete}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
@@ -1053,6 +1148,8 @@ const emptyStaffForm: StaffFormValues = {
   staffID: "",
 };
 
+// Staff UI moved to Receptionist Management; this legacy component will be removed in a cleanup pass.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function StaffManagementSection({
   branchID,
   initialStaff,
@@ -1072,6 +1169,7 @@ function StaffManagementSection({
   const [staffState, setStaffState] =
     useState<StaffManagementState>(initialStaffState);
   const [warning, setWarning] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const selectedPhoto =
     formValues.photoRemoved || !formValues.photoURL ? "" : formValues.photoURL;
 
@@ -1100,12 +1198,14 @@ function StaffManagementSection({
     setFormValues(emptyStaffForm);
     setMode(null);
     setWarning("");
+    setPasswordVisible(false);
   }
 
   function openCreate() {
     setStaffState(initialStaffState);
     setWarning("");
     setFormValues(emptyStaffForm);
+    setPasswordVisible(false);
     setMode("create");
   }
 
@@ -1116,6 +1216,7 @@ function StaffManagementSection({
     }
     setStaffState(initialStaffState);
     setWarning("");
+    setPasswordVisible(false);
     setFormValues({
       birthDate: member.birth_date ?? "",
       email: member.email,
@@ -1308,7 +1409,10 @@ function StaffManagementSection({
                 icon={Calendar}
                 label={labels.birthDate}
                 onChange={(value) =>
-                  setFormValues((current) => ({ ...current, birthDate: value }))
+                  setFormValues((current) => ({
+                    ...current,
+                    birthDate: formatBirthDateInput(value),
+                  }))
                 }
                 placeholder="DD/MM/YYYY"
                 value={formValues.birthDate}
@@ -1347,7 +1451,23 @@ function StaffManagementSection({
                 onChange={(value) =>
                   setFormValues((current) => ({ ...current, password: value }))
                 }
-                type="password"
+                trailing={
+                  <button
+                    aria-label={
+                      passwordVisible ? labels.hidePassword : labels.showPassword
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#687386] transition hover:text-[#0a284b] dark:text-[#a7b0bf] dark:hover:text-white"
+                    onClick={() => setPasswordVisible((current) => !current)}
+                    type="button"
+                  >
+                    {passwordVisible ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </button>
+                }
+                type={passwordVisible ? "text" : "password"}
                 value={formValues.password}
               />
             </div>
@@ -1435,7 +1555,7 @@ function StaffList({
                 </div>
               </div>
               <div className="rounded-full border border-[#dce3ee] px-3 py-1 text-sm font-black text-[#0a284b] dark:border-[#3a4658] dark:text-[#f3f6fa]">
-                AZN {member.salary_amount_azn}
+                ₼ {member.salary_amount_azn}
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <Button
@@ -1471,6 +1591,7 @@ function StaffInput({
   onChange,
   placeholder,
   prefix,
+  trailing,
   type = "text",
   value,
 }: {
@@ -1479,6 +1600,7 @@ function StaffInput({
   onChange: (value: string) => void;
   placeholder?: string;
   prefix?: string;
+  trailing?: ReactNode;
   type?: string;
   value: string;
 }) {
@@ -1495,13 +1617,14 @@ function StaffInput({
           </span>
         ) : null}
         <Input
-          className={prefix ? "pl-20" : "pl-10"}
+          className={`${prefix ? "pl-20" : "pl-10"} ${trailing ? "pr-10" : ""}`}
           inputMode={salaryInput ? "numeric" : undefined}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           type={type}
           value={value}
         />
+        {trailing}
       </div>
     </div>
   );
@@ -1629,7 +1752,8 @@ function getRoomNameAvailability(
   }
 
   const existsInSavedRooms = rooms.some(
-    (room) => normalizeComparableName(room.name) === normalized,
+    (room) =>
+      room.id !== editingRoomID && normalizeComparableName(room.name) === normalized,
   );
   const existsInPendingRooms = pendingRooms.some(
     (room) =>
@@ -1648,6 +1772,18 @@ function staffInitials(member: StaffMember) {
   return `${member.first_name[0] ?? ""}${member.last_name[0] ?? ""}`
     .trim()
     .toUpperCase();
+}
+
+function formatBirthDateInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) {
+    return digits;
+  }
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
 function StaffCell({
@@ -1762,6 +1898,10 @@ function BranchActions({
     setDeleteOpen(true);
   }
 
+  function stopRowSelection(event: { stopPropagation: () => void }) {
+    event.stopPropagation();
+  }
+
   function handleDeleteOpenChange(open: boolean) {
     setDeleteOpen(open);
     if (!open) {
@@ -1784,11 +1924,17 @@ function BranchActions({
             type="button"
             variant="ghost"
             onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <MoreHorizontal className="size-5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="z-[1100] min-w-48">
+        <DropdownMenuContent
+          align="end"
+          className="z-[1100] min-w-48"
+          onClick={stopRowSelection}
+          onPointerDown={stopRowSelection}
+        >
           <DropdownMenuItem
             className="cursor-pointer gap-2"
             onSelect={selectBranch}
@@ -1804,7 +1950,10 @@ function BranchActions({
             {labels.manageRooms}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="cursor-pointer gap-2 text-[#ef2334] hover:text-[#ef2334] focus:bg-[#fff1f2] focus:text-[#ef2334] data-[highlighted]:text-[#ef2334] [&_svg]:text-[#ef2334] [&_svg]:stroke-[#ef2334] dark:text-[#ff3b4f] dark:focus:bg-[#3a1e2a] dark:focus:text-[#ff3b4f] dark:data-[highlighted]:text-[#ff3b4f] dark:[&_svg]:text-[#ff3b4f] dark:[&_svg]:stroke-[#ff3b4f]">
+          <DropdownMenuItem
+            className="cursor-pointer gap-2 text-[#ef2334] hover:text-[#ef2334] focus:bg-[#fff1f2] focus:text-[#ef2334] data-[highlighted]:text-[#ef2334] [&_svg]:text-[#ef2334] [&_svg]:stroke-[#ef2334] dark:text-[#ff3b4f] dark:focus:bg-[#3a1e2a] dark:focus:text-[#ff3b4f] dark:data-[highlighted]:text-[#ff3b4f] dark:[&_svg]:text-[#ff3b4f] dark:[&_svg]:stroke-[#ff3b4f]"
+            onSelect={(event) => event.stopPropagation()}
+          >
             <Archive className="size-4" />
             {labels.archive}
           </DropdownMenuItem>
@@ -1829,6 +1978,9 @@ function BranchActions({
                 <DialogTitle className="text-xl font-black">
                   {labels.deleteBranchTitle}
                 </DialogTitle>
+                <div className="rounded-lg border border-[#f87171] bg-[#fff1f2] px-4 py-3 text-sm font-black text-[#991b1b] dark:bg-[#3b1218] dark:text-[#ffe4e6]">
+                  {labels.deleteBranchIrreversibleWarning}
+                </div>
                 <DialogDescription>
                   {labels.deleteBranchDescription}
                 </DialogDescription>
@@ -1906,15 +2058,19 @@ function BranchActions({
 }
 
 function RoomList({
+  editLabel,
   emptyLabel,
   label,
+  onEdit,
   onRemove,
   removeLabel,
   rooms,
 }: {
+  editLabel: string;
   emptyLabel: string;
   label: string;
-  onRemove: (id: string) => void;
+  onEdit: (room: Room) => void;
+  onRemove: (room: Room) => void;
   removeLabel: string;
   rooms: Room[];
 }) {
@@ -1932,9 +2088,11 @@ function RoomList({
           {rooms.map((room) => (
             <RoomRow
               capacity={room.capacity}
+              editLabel={editLabel}
               key={room.id}
               name={room.name}
-              onRemove={() => onRemove(room.id)}
+              onEdit={() => onEdit(room)}
+              onRemove={() => onRemove(room)}
               removeLabel={removeLabel}
             />
           ))}
@@ -2046,12 +2204,16 @@ function CreateBranchSubmit({
   pending: string;
 }) {
   const status = useFormStatus();
+  const submitLock = useSubmitLock(status.pending);
+
+  const blocked = status.pending || Boolean(disabled) || submitLock.locked;
 
   return (
     <Button
       className="w-full rounded-lg bg-[#ef2334] font-bold text-white hover:bg-[#d91f30]"
-      disabled={status.pending || disabled}
+      disabled={blocked}
       type="submit"
+      onClick={submitLock.onClick}
     >
       {status.pending ? pending : label}
     </Button>
@@ -2068,12 +2230,16 @@ function SaveBranchSubmit({
   pending: string;
 }) {
   const status = useFormStatus();
+  const submitLock = useSubmitLock(status.pending);
+
+  const blocked = status.pending || Boolean(disabled) || submitLock.locked;
 
   return (
     <Button
       className="gap-2 rounded-lg bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700"
-      disabled={status.pending || disabled}
+      disabled={blocked}
       type="submit"
+      onClick={submitLock.onClick}
     >
       <Save className="size-4" />
       {status.pending ? pending : label}
@@ -2089,12 +2255,16 @@ function DeleteBranchSubmit({
   pending: string;
 }) {
   const status = useFormStatus();
+  const submitLock = useSubmitLock(status.pending);
+
+  const blocked = status.pending || submitLock.locked;
 
   return (
     <Button
       className="bg-[#8f1020] text-white hover:bg-[#74101d]"
-      disabled={status.pending}
+      disabled={blocked}
       type="submit"
+      onClick={submitLock.onClick}
     >
       {status.pending ? pending : label}
     </Button>

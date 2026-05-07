@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Kingsway Backend API
   version: 0.2.0
-  description: Kingsway Operation Center backend HTTP contract.
+  description: Kingsway Operation Center backend HTTP contract. Authenticated JSON POST write endpoints accept optional Idempotency-Key for safe same-payload retry.
 servers:
   - url: http://127.0.0.1:8080
 security:
@@ -167,6 +167,29 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Staff"
+  /v1/student-assignment-hub:
+    get:
+      tags: [academic]
+      description: Combined Student & Assignment Hub list for branch, status, teacher, FIN, and name search.
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: status
+          in: query
+          schema:
+            enum: [active, left, graduated]
+        - name: teacher_id
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/StudentAssignmentHubPage"
   /v1/students:
     get:
       tags: [academic]
@@ -175,7 +198,7 @@ paths:
         - name: status
           in: query
           schema:
-            enum: [active, left]
+            enum: [active, left, graduated]
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
       responses:
@@ -207,6 +230,15 @@ paths:
       tags: [academic]
       parameters:
         - $ref: "#/components/parameters/StudentID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Student"
+    patch:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/StudentID"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateStudent"
       responses:
         "200":
           $ref: "#/components/responses/Student"
@@ -258,6 +290,47 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Teacher"
+    patch:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/TeacherID"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateTeacher"
+      responses:
+        "200":
+          $ref: "#/components/responses/Teacher"
+    delete:
+      tags: [finance]
+      description: Hard-deletes the teacher, linked login user, and teacher-owned records when no active students are assigned.
+      parameters:
+        - $ref: "#/components/parameters/TeacherID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Teacher"
+        "409":
+          description: Teacher has assigned students and cannot be deleted.
+  /v1/teacher-finance:
+    get:
+      tags: [finance]
+      parameters:
+        - $ref: "#/components/parameters/BranchID"
+        - name: subject
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            enum: [pending_owner_approval, active, terminated]
+        - name: salary_model
+          in: query
+          schema:
+            enum: [fixed, percent, hybrid]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          $ref: "#/components/responses/TeacherFinanceRecordList"
   /v1/teachers/{teacher_id}/activate:
     post:
       tags: [academic]
@@ -397,6 +470,15 @@ paths:
         "201":
           description: Created room.
   /v1/rooms/{room_id}:
+    patch:
+      tags: [academic]
+      parameters:
+        - $ref: "#/components/parameters/RoomID"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateRoom"
+      responses:
+        "200":
+          description: Updated room.
     delete:
       tags: [academic]
       parameters:
@@ -873,9 +955,79 @@ components:
                 type: string
               fin:
                 type: string
+                minLength: 7
+                maxLength: 7
               first_name:
                 type: string
               last_name:
+                type: string
+              birth_date:
+                type: string
+                example: "15/07/1998"
+              gender:
+                enum: [male, female, other]
+              phone:
+                type: string
+              address:
+                type: string
+              profile_photo_file_id:
+                type: string
+              status:
+                enum: [active, left, graduated]
+              parents:
+                type: array
+                items:
+                  type: object
+                  required: [relation, name, phones]
+                  properties:
+                    relation:
+                      enum: [father, mother, sister, brother, other]
+                    name:
+                      type: string
+                    phones:
+                      type: array
+                      items:
+                        type: string
+              courses:
+                type: array
+                items:
+                  type: object
+                  required: [course_id, monthly_amount_cents, start_date]
+                  properties:
+                    course_id:
+                      type: string
+                    teacher_id:
+                      type: string
+                    monthly_amount_cents:
+                      type: integer
+                    start_date:
+                      type: string
+                      example: "06/05/2026"
+    UpdateStudent:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              first_name:
+                type: string
+              last_name:
+                type: string
+              birth_date:
+                type: string
+                example: "15/07/1998"
+              gender:
+                enum: [male, female, other]
+              phone:
+                type: string
+              address:
+                type: string
+              profile_photo_file_id:
+                type: string
+              status:
+                enum: [active, left, graduated]
+              left_reason:
                 type: string
     CreateStudentAccount:
       required: true
@@ -905,8 +1057,15 @@ components:
               birth_date:
                 type: string
                 example: "31/12/1998"
+              gender:
+                enum: ["", male, female, other]
               phone:
                 type: string
+              address:
+                type: string
+              hired_at:
+                type: string
+                example: "31/12/2026"
               salary_amount_azn:
                 type: integer
                 minimum: 0
@@ -925,6 +1084,8 @@ components:
             type: object
             required: [first_name, last_name, email]
             properties:
+              branch_id:
+                type: string
               first_name:
                 type: string
               last_name:
@@ -932,11 +1093,20 @@ components:
               birth_date:
                 type: string
                 example: "31/12/1998"
+              gender:
+                enum: ["", male, female, other]
               phone:
                 type: string
+              address:
+                type: string
+              hired_at:
+                type: string
+                example: "31/12/2026"
               salary_amount_azn:
                 type: integer
                 minimum: 0
+              is_active:
+                type: boolean
               email:
                 type: string
               password:
@@ -950,7 +1120,7 @@ components:
         application/json:
           schema:
             type: object
-            required: [branch_id, email, password, first_name, last_name]
+            required: [branch_id, email, password, first_name, last_name, phone]
             properties:
               branch_id:
                 type: string
@@ -962,6 +1132,55 @@ components:
                 type: string
               last_name:
                 type: string
+              birth_date:
+                type: string
+                example: "31/12/1998"
+              gender:
+                enum: [male, female, other]
+              phone:
+                type: string
+              address:
+                type: string
+              profile_photo_file_id:
+                type: string
+              subjects:
+                type: array
+                items:
+                  type: string
+    UpdateTeacher:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              branch_id:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+                minLength: 8
+                description: Optional. Empty string keeps the current password.
+              first_name:
+                type: string
+              last_name:
+                type: string
+              birth_date:
+                type: string
+                example: "31/12/1998"
+              gender:
+                enum: [male, female, other]
+              phone:
+                type: string
+              address:
+                type: string
+              profile_photo_file_id:
+                type: string
+              subjects:
+                type: array
+                items:
+                  type: string
     CreateCourse:
       required: true
       content:
@@ -1044,6 +1263,18 @@ components:
             properties:
               branch_id:
                 type: string
+              name:
+                type: string
+              capacity:
+                type: integer
+    UpdateRoom:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, capacity]
+            properties:
               name:
                 type: string
               capacity:
@@ -1290,6 +1521,19 @@ components:
             type: array
             items:
               $ref: "#/components/schemas/Student"
+    StudentAssignmentHubPage:
+      description: Paginated Student & Assignment Hub rows.
+      headers:
+        X-Total-Count:
+          $ref: "#/components/headers/XTotalCount"
+        X-Limit:
+          $ref: "#/components/headers/XLimit"
+        X-Offset:
+          $ref: "#/components/headers/XOffset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StudentAssignmentHubPage"
     Teacher:
       description: Teacher.
       content:
@@ -1304,6 +1548,14 @@ components:
             type: array
             items:
               $ref: "#/components/schemas/Teacher"
+    TeacherFinanceRecordList:
+      description: Teacher Finance & HR table rows.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TeacherFinanceRecord"
     Course:
       description: Course.
       content:
@@ -1520,13 +1772,25 @@ components:
         birth_date:
           type: string
           example: "31/12/1998"
+        gender:
+          enum: ["", male, female, other]
         phone:
           type: string
+        address:
+          type: string
+        hired_at:
+          type: string
+          example: "31/12/2026"
         salary_amount_azn:
           type: integer
           minimum: 0
         profile_photo_file_id:
           type: string
+        is_active:
+          type: boolean
+        last_login_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time
@@ -1548,10 +1812,69 @@ components:
           type: string
         last_name:
           type: string
+        birth_date:
+          type: string
+        gender:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        profile_photo_file_id:
+          type: string
         status:
-          enum: [active, left]
+          enum: [active, left, graduated]
         left_reason:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StudentAssignmentHubPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentAssignmentHubRecord"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    StudentAssignmentHubRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        branch_name:
+          type: string
+        user_id:
+          type: string
+        fin:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        profile_photo_file_id:
+          type: string
+        status:
+          enum: [active, left, graduated]
+        active_teacher_id:
+          type: string
+        active_teacher_first_name:
+          type: string
+        active_teacher_last_name:
+          type: string
+        registered_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time
@@ -1569,6 +1892,52 @@ components:
           type: string
         status:
           enum: [pending_owner_approval, active, terminated]
+        birth_date:
+          type: string
+          example: "31/12/1998"
+        gender:
+          enum: [male, female, other]
+        phone:
+          type: string
+        address:
+          type: string
+        profile_photo_file_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TeacherFinanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        branch_id:
+          type: string
+        branch_name:
+          type: string
+        user_id:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        profile_photo_file_id:
+          type: string
+        subject:
+          type: string
+        status:
+          enum: [pending_owner_approval, active, terminated]
+        salary_type:
+          enum: [fixed, percent, hybrid]
+        assigned_students:
+          type: integer
+        calculated_salary_amount_cents:
+          type: integer
         created_at:
           type: string
           format: date-time

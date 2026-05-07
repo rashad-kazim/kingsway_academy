@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
-  ArrowLeftRight,
   BadgeDollarSign,
   Bell,
   Building2,
@@ -29,6 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  ProfileMenu,
   TopbarControls,
   type ChromeLabels,
 } from "@/components/layout/topbar-controls";
@@ -42,9 +42,8 @@ type NavLabelKey =
   | "branchManagement"
   | "teacherFinanceHr"
   | "receptionistManagement"
-  | "studentManagement"
+  | "studentAssignmentHub"
   | "schedulingRooms"
-  | "assignmentSwap"
   | "paymentHub"
   | "eventsExams"
   | "students"
@@ -108,7 +107,7 @@ const navigation: NavItem[] = [
   },
   {
     href: "/dashboard/owner",
-    labelKey: "studentManagement",
+    labelKey: "studentAssignmentHub",
     icon: Users,
     roles: ["owner"],
   },
@@ -116,12 +115,6 @@ const navigation: NavItem[] = [
     href: "/dashboard/owner",
     labelKey: "schedulingRooms",
     icon: CalendarDays,
-    roles: ["owner"],
-  },
-  {
-    href: "/dashboard/owner",
-    labelKey: "assignmentSwap",
-    icon: ArrowLeftRight,
     roles: ["owner"],
   },
   {
@@ -216,19 +209,35 @@ export function AppShell({
   }
 
   function isNavigationActive(item: NavItem, href: string) {
-    const activeBranchID = selectedBranch?.id ?? searchParams.get("branch_id");
     const activeView = searchParams.get("view");
 
     if (item.labelKey === "globalDashboard") {
-      return (
-        pathname === `/${locale}${href}` &&
-        Boolean(activeBranchID) &&
-        activeView !== "branches"
-      );
+      return pathname === `/${locale}${href}` && !activeView;
     }
 
     if (item.labelKey === "branchManagement") {
       return pathname === `/${locale}/dashboard/owner` && activeView === "branches";
+    }
+
+    if (item.labelKey === "teacherFinanceHr") {
+      return (
+        (pathname === `/${locale}/dashboard/owner` &&
+          (activeView === "teacher-finance" ||
+            activeView === "teacher-add" ||
+            activeView === "teacher-edit")) ||
+        pathname.startsWith(`/${locale}/dashboard/owner/teacher`)
+      );
+    }
+
+    if (item.labelKey === "receptionistManagement") {
+      return pathname === `/${locale}/dashboard/owner` && activeView === "receptionists";
+    }
+
+    if (item.labelKey === "studentAssignmentHub") {
+      return (
+        pathname === `/${locale}/dashboard/owner` &&
+        (activeView === "student-assignment" || activeView === "student-add")
+      );
     }
 
     return false;
@@ -278,8 +287,7 @@ export function AppShell({
         <TopbarControls
           labels={labels.common}
           locale={locale}
-          role={session.user.role}
-          userName={userName}
+          showProfile={false}
         />
       </header>
 
@@ -304,6 +312,15 @@ export function AppShell({
                   : item.labelKey === "branchManagement" &&
                       session.user.role === "owner"
                     ? `/${locale}${href}?view=branches`
+                  : item.labelKey === "teacherFinanceHr" &&
+                      session.user.role === "owner"
+                    ? `/${locale}${href}?view=teacher-finance`
+                  : item.labelKey === "receptionistManagement" &&
+                      session.user.role === "owner"
+                    ? `/${locale}${href}?view=receptionists`
+                  : item.labelKey === "studentAssignmentHub" &&
+                      session.user.role === "owner"
+                    ? `/${locale}${href}?view=student-assignment`
                   : shouldScopeToBranch
                     ? `/${locale}${href}?branch_id=${selectedBranchID}`
                     : `/${locale}${href}`;
@@ -320,6 +337,16 @@ export function AppShell({
               );
             })}
           </nav>
+          <div className="border-t border-white/10 p-3 dark:border-[#293445]">
+            <ProfileMenu
+              labels={labels.common}
+              locale={locale}
+              open={sidebarOpen}
+              role={session.user.role}
+              userName={userName}
+              variant="sidebar"
+            />
+          </div>
         </div>
       </aside>
 

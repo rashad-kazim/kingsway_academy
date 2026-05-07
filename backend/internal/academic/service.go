@@ -22,16 +22,22 @@ type Store interface {
 	GetStaffMember(ctx context.Context, id string) (domain.StaffMember, error)
 	ListStaffMembers(ctx context.Context, branchID string) ([]domain.StaffMember, error)
 	CreateStudent(ctx context.Context, student domain.Student) (domain.Student, error)
+	CreateStudentWithDetails(ctx context.Context, student domain.Student, parents []domain.StudentParentContact, registrations []domain.StudentCourseRegistration) (domain.Student, error)
 	GetStudent(ctx context.Context, id string) (domain.Student, error)
 	GetStudentByUser(ctx context.Context, userID string) (domain.Student, error)
 	GetStudentByFIN(ctx context.Context, fin domain.FIN) (domain.Student, error)
 	UpdateStudent(ctx context.Context, student domain.Student) (domain.Student, error)
 	ListStudents(ctx context.Context, branchID string) ([]domain.Student, error)
+	ListStudentAssignmentHub(ctx context.Context, filter domain.StudentAssignmentHubFilter) (domain.StudentAssignmentHubPage, error)
+	CreateStudentParentContacts(ctx context.Context, studentID string, contacts []domain.StudentParentContact) ([]domain.StudentParentContact, error)
+	CreateStudentCourseRegistrations(ctx context.Context, studentID string, registrations []domain.StudentCourseRegistration) ([]domain.StudentCourseRegistration, error)
 	CreateTeacher(ctx context.Context, teacher domain.Teacher) (domain.Teacher, error)
 	GetTeacher(ctx context.Context, id string) (domain.Teacher, error)
 	GetTeacherByUser(ctx context.Context, userID string) (domain.Teacher, error)
 	UpdateTeacher(ctx context.Context, teacher domain.Teacher) (domain.Teacher, error)
+	UpdateTeacherAccount(ctx context.Context, teacher domain.Teacher, user domain.User, passwordHash string) (domain.Teacher, domain.User, error)
 	ListTeachers(ctx context.Context, branchID string) ([]domain.Teacher, error)
+	ReplaceTeacherCourseSpecializations(ctx context.Context, teacherID string, courseIDs []string) error
 	CreateCourse(ctx context.Context, course domain.Course, categories []domain.ScoreCategory) (domain.Course, []domain.ScoreCategory, error)
 	GetCourse(ctx context.Context, id string) (domain.Course, error)
 	ListCourses(ctx context.Context, branchID string) ([]domain.Course, error)
@@ -43,6 +49,7 @@ type Store interface {
 	CreateAssignment(ctx context.Context, assignment domain.Assignment) (domain.Assignment, error)
 	ListAssignments(ctx context.Context, branchID string, classID string) ([]domain.Assignment, error)
 	CreateRoom(ctx context.Context, room domain.Room) (domain.Room, error)
+	UpdateRoom(ctx context.Context, room domain.Room) (domain.Room, error)
 	GetRoom(ctx context.Context, id string) (domain.Room, error)
 	DeactivateRoom(ctx context.Context, id string) (domain.Room, error)
 	ListRooms(ctx context.Context, branchID string) ([]domain.Room, error)
@@ -58,6 +65,7 @@ type Store interface {
 
 type AuthService interface {
 	CreateUser(ctx context.Context, actor domain.Principal, input auth.CreateUserInput) (domain.User, error)
+	CurrentUser(ctx context.Context, principal domain.Principal) (domain.User, error)
 }
 
 type Service struct {
@@ -87,7 +95,10 @@ type CreateStaffInput struct {
 	FirstName          string `json:"first_name"`
 	LastName           string `json:"last_name"`
 	BirthDate          string `json:"birth_date"`
+	Gender             string `json:"gender"`
 	Phone              string `json:"phone"`
+	Address            string `json:"address"`
+	HiredAt            string `json:"hired_at"`
 	SalaryAmountAZN    int    `json:"salary_amount_azn"`
 	Email              string `json:"email"`
 	Password           string `json:"password"`
@@ -96,23 +107,48 @@ type CreateStaffInput struct {
 
 type UpdateStaffInput struct {
 	ID                 string `json:"id"`
+	BranchID           string `json:"branch_id"`
 	FirstName          string `json:"first_name"`
 	LastName           string `json:"last_name"`
 	BirthDate          string `json:"birth_date"`
+	Gender             string `json:"gender"`
 	Phone              string `json:"phone"`
+	Address            string `json:"address"`
+	HiredAt            string `json:"hired_at"`
 	SalaryAmountAZN    int    `json:"salary_amount_azn"`
 	Email              string `json:"email"`
 	Password           string `json:"password"`
 	ProfilePhotoFileID string `json:"profile_photo_file_id"`
+	IsActive           *bool  `json:"is_active"`
 }
 
 type CreateStudentInput struct {
-	BranchID   string               `json:"branch_id"`
-	FIN        string               `json:"fin"`
-	FirstName  string               `json:"first_name"`
-	LastName   string               `json:"last_name"`
-	Status     domain.StudentStatus `json:"status"`
-	LeftReason string               `json:"left_reason"`
+	BranchID           string                     `json:"branch_id"`
+	FIN                string                     `json:"fin"`
+	FirstName          string                     `json:"first_name"`
+	LastName           string                     `json:"last_name"`
+	BirthDate          string                     `json:"birth_date"`
+	Gender             string                     `json:"gender"`
+	Phone              string                     `json:"phone"`
+	Address            string                     `json:"address"`
+	ProfilePhotoFileID string                     `json:"profile_photo_file_id"`
+	Status             domain.StudentStatus       `json:"status"`
+	LeftReason         string                     `json:"left_reason"`
+	Parents            []StudentParentInput       `json:"parents"`
+	Courses            []StudentCourseAssignInput `json:"courses"`
+}
+
+type StudentParentInput struct {
+	Relation string   `json:"relation"`
+	Name     string   `json:"name"`
+	Phones   []string `json:"phones"`
+}
+
+type StudentCourseAssignInput struct {
+	CourseID           string `json:"course_id"`
+	TeacherID          string `json:"teacher_id"`
+	MonthlyAmountCents int64  `json:"monthly_amount_cents"`
+	StartDate          string `json:"start_date"`
 }
 
 type CreateStudentAccountInput struct {
@@ -122,12 +158,47 @@ type CreateStudentAccountInput struct {
 	LastName  string `json:"last_name"`
 }
 
+type UpdateStudentInput struct {
+	FirstName          string               `json:"first_name"`
+	LastName           string               `json:"last_name"`
+	BirthDate          string               `json:"birth_date"`
+	Gender             string               `json:"gender"`
+	Phone              string               `json:"phone"`
+	Address            string               `json:"address"`
+	ProfilePhotoFileID string               `json:"profile_photo_file_id"`
+	Status             domain.StudentStatus `json:"status"`
+	LeftReason         string               `json:"left_reason"`
+}
+
 type RegisterTeacherInput struct {
-	BranchID  string `json:"branch_id"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	BranchID           string   `json:"branch_id"`
+	Email              string   `json:"email"`
+	Password           string   `json:"password"`
+	FirstName          string   `json:"first_name"`
+	LastName           string   `json:"last_name"`
+	BirthDate          string   `json:"birth_date"`
+	Gender             string   `json:"gender"`
+	Phone              string   `json:"phone"`
+	Address            string   `json:"address"`
+	ProfilePhotoFileID string   `json:"profile_photo_file_id"`
+	CourseIDs          []string `json:"course_ids"`
+	Subjects           []string `json:"subjects"`
+}
+
+type UpdateTeacherInput struct {
+	ID                 string   `json:"id"`
+	BranchID           string   `json:"branch_id"`
+	Email              string   `json:"email"`
+	Password           string   `json:"password"`
+	FirstName          string   `json:"first_name"`
+	LastName           string   `json:"last_name"`
+	BirthDate          string   `json:"birth_date"`
+	Gender             string   `json:"gender"`
+	Phone              string   `json:"phone"`
+	Address            string   `json:"address"`
+	ProfilePhotoFileID string   `json:"profile_photo_file_id"`
+	CourseIDs          []string `json:"course_ids"`
+	Subjects           []string `json:"subjects"`
 }
 
 type CourseCategoryInput struct {
@@ -173,6 +244,12 @@ type CreateAssignmentInput struct {
 
 type CreateRoomInput struct {
 	BranchID string `json:"branch_id"`
+	Name     string `json:"name"`
+	Capacity int    `json:"capacity"`
+}
+
+type UpdateRoomInput struct {
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Capacity int    `json:"capacity"`
 }
@@ -306,6 +383,13 @@ func (s *Service) CreateStaffMember(ctx context.Context, actor domain.Principal,
 	if err != nil {
 		return domain.StaffMember{}, err
 	}
+	hiredAt, err := normalizeBirthDate(input.HiredAt)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if !isHireDateOnOrAfterBirthDate(birthDate, hiredAt) {
+		return domain.StaffMember{}, domain.ErrInvalidInput
+	}
 	if input.SalaryAmountAZN < 0 {
 		return domain.StaffMember{}, domain.ErrInvalidInput
 	}
@@ -325,7 +409,10 @@ func (s *Service) CreateStaffMember(ctx context.Context, actor domain.Principal,
 		BranchID:           branchID,
 		Role:               domain.RoleReceptionist,
 		BirthDate:          birthDate,
+		Gender:             normalizeOptionalTeacherGender(input.Gender),
 		Phone:              strings.TrimSpace(input.Phone),
+		Address:            strings.TrimSpace(input.Address),
+		HiredAt:            hiredAt,
 		SalaryAmountAZN:    input.SalaryAmountAZN,
 		ProfilePhotoFileID: strings.TrimSpace(input.ProfilePhotoFileID),
 	})
@@ -342,12 +429,29 @@ func (s *Service) UpdateStaffMember(ctx context.Context, actor domain.Principal,
 	if err := auth.RequireBranch(actor, current.BranchID); err != nil {
 		return domain.StaffMember{}, err
 	}
+	nextBranchID := strings.TrimSpace(input.BranchID)
+	if nextBranchID != "" && nextBranchID != current.BranchID {
+		if err := auth.RequireBranch(actor, nextBranchID); err != nil {
+			return domain.StaffMember{}, err
+		}
+		if _, err := s.store.GetBranch(ctx, nextBranchID); err != nil {
+			return domain.StaffMember{}, err
+		}
+		current.BranchID = nextBranchID
+	}
 	if strings.TrimSpace(input.FirstName) == "" || strings.TrimSpace(input.LastName) == "" || strings.TrimSpace(input.Email) == "" {
 		return domain.StaffMember{}, domain.ErrInvalidInput
 	}
 	birthDate, err := normalizeBirthDate(input.BirthDate)
 	if err != nil {
 		return domain.StaffMember{}, err
+	}
+	hiredAt, err := normalizeBirthDate(input.HiredAt)
+	if err != nil {
+		return domain.StaffMember{}, err
+	}
+	if !isHireDateOnOrAfterBirthDate(birthDate, hiredAt) {
+		return domain.StaffMember{}, domain.ErrInvalidInput
 	}
 	if input.SalaryAmountAZN < 0 {
 		return domain.StaffMember{}, domain.ErrInvalidInput
@@ -364,9 +468,15 @@ func (s *Service) UpdateStaffMember(ctx context.Context, actor domain.Principal,
 	current.LastName = strings.TrimSpace(input.LastName)
 	current.Email = strings.TrimSpace(input.Email)
 	current.BirthDate = birthDate
+	current.Gender = normalizeOptionalTeacherGender(input.Gender)
 	current.Phone = strings.TrimSpace(input.Phone)
+	current.Address = strings.TrimSpace(input.Address)
+	current.HiredAt = hiredAt
 	current.SalaryAmountAZN = input.SalaryAmountAZN
 	current.ProfilePhotoFileID = strings.TrimSpace(input.ProfilePhotoFileID)
+	if input.IsActive != nil {
+		current.IsActive = *input.IsActive
+	}
 	return s.store.UpdateStaffMember(ctx, current, passwordHash)
 }
 
@@ -410,14 +520,38 @@ func (s *Service) CreateStudent(ctx context.Context, actor domain.Principal, inp
 		return domain.Student{}, err
 	}
 
-	return s.store.CreateStudent(ctx, domain.Student{
-		BranchID:   input.BranchID,
-		FIN:        fin,
-		FirstName:  strings.TrimSpace(input.FirstName),
-		LastName:   strings.TrimSpace(input.LastName),
-		Status:     input.Status,
-		LeftReason: strings.TrimSpace(input.LeftReason),
-	})
+	if strings.TrimSpace(input.FirstName) == "" || strings.TrimSpace(input.LastName) == "" {
+		return domain.Student{}, domain.ErrInvalidInput
+	}
+	if input.Gender != "" && input.Gender != "male" && input.Gender != "female" && input.Gender != "other" {
+		return domain.Student{}, domain.ErrInvalidInput
+	}
+	if strings.TrimSpace(input.BirthDate) != "" && !validShortDate(input.BirthDate) {
+		return domain.Student{}, domain.ErrInvalidInput
+	}
+
+	parents, err := buildStudentParentContacts(input.BranchID, input.Parents)
+	if err != nil {
+		return domain.Student{}, err
+	}
+	registrations, err := s.buildStudentCourseRegistrations(ctx, input.BranchID, input.Courses)
+	if err != nil {
+		return domain.Student{}, err
+	}
+
+	return s.store.CreateStudentWithDetails(ctx, domain.Student{
+		BranchID:           input.BranchID,
+		FIN:                fin,
+		FirstName:          strings.TrimSpace(input.FirstName),
+		LastName:           strings.TrimSpace(input.LastName),
+		BirthDate:          strings.TrimSpace(input.BirthDate),
+		Gender:             strings.TrimSpace(input.Gender),
+		Phone:              strings.TrimSpace(input.Phone),
+		Address:            strings.TrimSpace(input.Address),
+		ProfilePhotoFileID: strings.TrimSpace(input.ProfilePhotoFileID),
+		Status:             input.Status,
+		LeftReason:         strings.TrimSpace(input.LeftReason),
+	}, parents, registrations)
 }
 
 func (s *Service) GetStudentByFIN(ctx context.Context, actor domain.Principal, finValue string) (domain.Student, error) {
@@ -437,6 +571,97 @@ func (s *Service) GetStudentByFIN(ctx context.Context, actor domain.Principal, f
 	return student, nil
 }
 
+func buildStudentParentContacts(branchID string, input []StudentParentInput) ([]domain.StudentParentContact, error) {
+	contacts := make([]domain.StudentParentContact, 0, len(input))
+	for _, item := range input {
+		relation := strings.TrimSpace(strings.ToLower(item.Relation))
+		name := strings.TrimSpace(item.Name)
+		if relation == "" && name == "" && len(item.Phones) == 0 {
+			continue
+		}
+		if relation != "father" && relation != "mother" && relation != "sister" && relation != "brother" && relation != "other" {
+			return nil, domain.ErrInvalidInput
+		}
+		if name == "" {
+			return nil, domain.ErrInvalidInput
+		}
+		phones := make([]string, 0, len(item.Phones))
+		for _, phone := range item.Phones {
+			phone = strings.TrimSpace(phone)
+			if phone != "" {
+				phones = append(phones, phone)
+			}
+		}
+		if len(phones) == 0 {
+			return nil, domain.ErrInvalidInput
+		}
+		contacts = append(contacts, domain.StudentParentContact{
+			BranchID: branchID,
+			Relation: relation,
+			Name:     name,
+			Phones:   phones,
+		})
+	}
+
+	return contacts, nil
+}
+
+func (s *Service) buildStudentCourseRegistrations(ctx context.Context, branchID string, input []StudentCourseAssignInput) ([]domain.StudentCourseRegistration, error) {
+	registrations := make([]domain.StudentCourseRegistration, 0, len(input))
+	seen := make(map[string]struct{}, len(input))
+	for _, item := range input {
+		courseID := strings.TrimSpace(item.CourseID)
+		if courseID == "" {
+			continue
+		}
+		if _, exists := seen[courseID]; exists {
+			return nil, domain.ErrInvalidInput
+		}
+		seen[courseID] = struct{}{}
+
+		course, err := s.store.GetCourse(ctx, courseID)
+		if err != nil {
+			return nil, err
+		}
+		if course.BranchID != branchID || !course.IsActive || item.MonthlyAmountCents < 0 {
+			return nil, domain.ErrInvalidInput
+		}
+		if !validShortDate(item.StartDate) {
+			return nil, domain.ErrInvalidInput
+		}
+
+		teacherID := strings.TrimSpace(item.TeacherID)
+		if teacherID != "" {
+			teacher, err := s.store.GetTeacher(ctx, teacherID)
+			if err != nil {
+				return nil, err
+			}
+			if teacher.BranchID != branchID || teacher.Status != domain.TeacherStatusActive {
+				return nil, domain.ErrInvalidInput
+			}
+		}
+
+		registrations = append(registrations, domain.StudentCourseRegistration{
+			BranchID:           branchID,
+			CourseID:           courseID,
+			TeacherID:          teacherID,
+			MonthlyAmountCents: item.MonthlyAmountCents,
+			StartDate:          strings.TrimSpace(item.StartDate),
+		})
+	}
+
+	return registrations, nil
+}
+
+func validShortDate(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	_, err := time.Parse("02/01/2006", value)
+	return err == nil
+}
+
 func (s *Service) GetStudent(ctx context.Context, actor domain.Principal, id string) (domain.Student, error) {
 	student, err := s.store.GetStudent(ctx, strings.TrimSpace(id))
 	if err != nil {
@@ -450,6 +675,45 @@ func (s *Service) GetStudent(ctx context.Context, actor domain.Principal, id str
 	}
 
 	return student, nil
+}
+
+func (s *Service) UpdateStudent(ctx context.Context, actor domain.Principal, id string, input UpdateStudentInput) (domain.Student, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return domain.Student{}, err
+	}
+	student, err := s.store.GetStudent(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return domain.Student{}, err
+	}
+	if err := auth.RequireBranch(actor, student.BranchID); err != nil {
+		return domain.Student{}, err
+	}
+	if strings.TrimSpace(input.FirstName) != "" {
+		student.FirstName = strings.TrimSpace(input.FirstName)
+	}
+	if strings.TrimSpace(input.LastName) != "" {
+		student.LastName = strings.TrimSpace(input.LastName)
+	}
+	if strings.TrimSpace(input.BirthDate) != "" && !validShortDate(input.BirthDate) {
+		return domain.Student{}, domain.ErrInvalidInput
+	}
+	if input.Gender != "" && input.Gender != "male" && input.Gender != "female" && input.Gender != "other" {
+		return domain.Student{}, domain.ErrInvalidInput
+	}
+	student.BirthDate = strings.TrimSpace(input.BirthDate)
+	student.Gender = strings.TrimSpace(input.Gender)
+	student.Phone = strings.TrimSpace(input.Phone)
+	student.Address = strings.TrimSpace(input.Address)
+	student.ProfilePhotoFileID = strings.TrimSpace(input.ProfilePhotoFileID)
+	if input.Status != "" {
+		if input.Status != domain.StudentStatusActive && input.Status != domain.StudentStatusLeft && input.Status != domain.StudentStatusGraduated {
+			return domain.Student{}, domain.ErrInvalidInput
+		}
+		student.Status = input.Status
+	}
+	student.LeftReason = strings.TrimSpace(input.LeftReason)
+
+	return s.store.UpdateStudent(ctx, student)
 }
 
 func (s *Service) CreateStudentAccount(ctx context.Context, actor domain.Principal, studentID string, input CreateStudentAccountInput) (domain.Student, domain.User, error) {
@@ -511,6 +775,34 @@ func (s *Service) ListStudents(ctx context.Context, actor domain.Principal, bran
 	return s.filterStudentsForActor(ctx, actor, students)
 }
 
+func (s *Service) ListStudentAssignmentHub(ctx context.Context, actor domain.Principal, filter domain.StudentAssignmentHubFilter) (domain.StudentAssignmentHubPage, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return domain.StudentAssignmentHubPage{}, err
+	}
+	if !actor.IsOwner() {
+		filter.BranchID = actor.BranchID
+	}
+	if filter.BranchID != "" {
+		if err := auth.RequireBranch(actor, filter.BranchID); err != nil {
+			return domain.StudentAssignmentHubPage{}, err
+		}
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.TeacherID = strings.TrimSpace(filter.TeacherID)
+	filter.BranchID = strings.TrimSpace(filter.BranchID)
+	if filter.Status != "" && filter.Status != domain.StudentStatusActive && filter.Status != domain.StudentStatusLeft && filter.Status != domain.StudentStatusGraduated {
+		return domain.StudentAssignmentHubPage{}, domain.ErrInvalidInput
+	}
+	if filter.Limit <= 0 || filter.Limit > 500 {
+		filter.Limit = 20
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	return s.store.ListStudentAssignmentHub(ctx, filter)
+}
+
 func (s *Service) RegisterTeacher(ctx context.Context, actor domain.Principal, input RegisterTeacherInput) (domain.Teacher, domain.User, error) {
 	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
 		return domain.Teacher{}, domain.User{}, err
@@ -520,6 +812,13 @@ func (s *Service) RegisterTeacher(ctx context.Context, actor domain.Principal, i
 	}
 	if err := auth.RequireBranch(actor, input.BranchID); err != nil {
 		return domain.Teacher{}, domain.User{}, err
+	}
+	if strings.TrimSpace(input.FirstName) == "" ||
+		strings.TrimSpace(input.LastName) == "" ||
+		strings.TrimSpace(input.Email) == "" ||
+		strings.TrimSpace(input.Password) == "" ||
+		strings.TrimSpace(input.Phone) == "" {
+		return domain.Teacher{}, domain.User{}, domain.ErrInvalidInput
 	}
 
 	user, err := s.auth.CreateUser(ctx, actor, auth.CreateUserInput{
@@ -535,15 +834,96 @@ func (s *Service) RegisterTeacher(ctx context.Context, actor domain.Principal, i
 	}
 
 	teacher, err := s.store.CreateTeacher(ctx, domain.Teacher{
-		BranchID: input.BranchID,
-		UserID:   user.ID,
-		Status:   domain.TeacherStatusPending,
+		BranchID:           input.BranchID,
+		UserID:             user.ID,
+		Status:             domain.TeacherStatusPending,
+		BirthDate:          strings.TrimSpace(input.BirthDate),
+		Gender:             normalizeOptionalTeacherGender(input.Gender),
+		Phone:              strings.TrimSpace(input.Phone),
+		Address:            strings.TrimSpace(input.Address),
+		ProfilePhotoFileID: strings.TrimSpace(input.ProfilePhotoFileID),
 	})
 	if err != nil {
 		return domain.Teacher{}, domain.User{}, err
 	}
+	courseIDs, err := s.teacherCourseIDs(ctx, input.BranchID, input.CourseIDs, input.Subjects)
+	if err != nil {
+		return domain.Teacher{}, domain.User{}, err
+	}
+	if len(courseIDs) > 0 {
+		if err := s.store.ReplaceTeacherCourseSpecializations(ctx, teacher.ID, courseIDs); err != nil {
+			return domain.Teacher{}, domain.User{}, err
+		}
+	}
 
 	return teacher, user, nil
+}
+
+func (s *Service) UpdateTeacher(ctx context.Context, actor domain.Principal, input UpdateTeacherInput) (domain.Teacher, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return domain.Teacher{}, err
+	}
+	teacher, err := s.store.GetTeacher(ctx, strings.TrimSpace(input.ID))
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	if err := auth.RequireBranch(actor, teacher.BranchID); err != nil {
+		return domain.Teacher{}, err
+	}
+	user, err := s.auth.CurrentUser(ctx, domain.Principal{UserID: teacher.UserID})
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	if actor.IsOwner() && strings.TrimSpace(input.BranchID) != "" {
+		teacher.BranchID = strings.TrimSpace(input.BranchID)
+	}
+	if err := auth.RequireBranch(actor, teacher.BranchID); err != nil {
+		return domain.Teacher{}, err
+	}
+	if strings.TrimSpace(input.Email) != "" {
+		user.Email = strings.TrimSpace(input.Email)
+	}
+	if strings.TrimSpace(input.FirstName) != "" {
+		user.FirstName = strings.TrimSpace(input.FirstName)
+	}
+	if strings.TrimSpace(input.LastName) != "" {
+		user.LastName = strings.TrimSpace(input.LastName)
+	}
+	user.BranchID = teacher.BranchID
+	teacher.BirthDate = strings.TrimSpace(input.BirthDate)
+	teacher.Gender = normalizeOptionalTeacherGender(input.Gender)
+	teacher.Phone = strings.TrimSpace(input.Phone)
+	teacher.Address = strings.TrimSpace(input.Address)
+	teacher.ProfilePhotoFileID = strings.TrimSpace(input.ProfilePhotoFileID)
+	if strings.TrimSpace(user.Email) == "" ||
+		strings.TrimSpace(user.FirstName) == "" ||
+		strings.TrimSpace(user.LastName) == "" ||
+		strings.TrimSpace(teacher.Phone) == "" {
+		return domain.Teacher{}, domain.ErrInvalidInput
+	}
+	passwordHash := ""
+	if strings.TrimSpace(input.Password) != "" {
+		passwordHash, err = auth.HashPassword(input.Password)
+		if err != nil {
+			return domain.Teacher{}, err
+		}
+	}
+
+	updated, _, err := s.store.UpdateTeacherAccount(ctx, teacher, user, passwordHash)
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	courseIDs, err := s.teacherCourseIDs(ctx, updated.BranchID, input.CourseIDs, input.Subjects)
+	if err != nil {
+		return domain.Teacher{}, err
+	}
+	if len(courseIDs) > 0 {
+		if err := s.store.ReplaceTeacherCourseSpecializations(ctx, teacher.ID, courseIDs); err != nil {
+			return domain.Teacher{}, err
+		}
+	}
+
+	return updated, nil
 }
 
 func (s *Service) ActivateTeacher(ctx context.Context, actor domain.Principal, teacherID string) (domain.Teacher, error) {
@@ -558,6 +938,71 @@ func (s *Service) ActivateTeacher(ctx context.Context, actor domain.Principal, t
 	teacher.Status = domain.TeacherStatusActive
 
 	return s.store.UpdateTeacher(ctx, teacher)
+}
+
+func (s *Service) teacherCourseIDs(ctx context.Context, branchID string, rawCourseIDs []string, subjects []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	courseIDs := make([]string, 0, len(rawCourseIDs)+len(subjects))
+	for _, courseID := range rawCourseIDs {
+		courseID = strings.TrimSpace(courseID)
+		if courseID == "" {
+			continue
+		}
+		course, err := s.store.GetCourse(ctx, courseID)
+		if err != nil {
+			return nil, err
+		}
+		if course.BranchID != branchID {
+			return nil, domain.ErrInvalidInput
+		}
+		if _, exists := seen[course.ID]; !exists {
+			seen[course.ID] = struct{}{}
+			courseIDs = append(courseIDs, course.ID)
+		}
+	}
+
+	for _, subject := range subjects {
+		subject = strings.TrimSpace(subject)
+		if subject == "" {
+			continue
+		}
+		course, err := s.ensureCourseByName(ctx, branchID, subject)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seen[course.ID]; !exists {
+			seen[course.ID] = struct{}{}
+			courseIDs = append(courseIDs, course.ID)
+		}
+	}
+
+	return courseIDs, nil
+}
+
+func (s *Service) ensureCourseByName(ctx context.Context, branchID string, name string) (domain.Course, error) {
+	courses, err := s.store.ListCourses(ctx, branchID)
+	if err != nil {
+		return domain.Course{}, err
+	}
+	for _, course := range courses {
+		if strings.EqualFold(course.Name, name) {
+			return course, nil
+		}
+	}
+	course, _, err := s.store.CreateCourse(ctx, domain.Course{
+		BranchID: branchID,
+		Name:     name,
+	}, nil)
+	return course, err
+}
+
+func normalizeOptionalTeacherGender(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "male", "female", "other":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func (s *Service) ListTeachers(ctx context.Context, actor domain.Principal, branchID string) ([]domain.Teacher, error) {
@@ -846,6 +1291,31 @@ func (s *Service) CreateRoom(ctx context.Context, actor domain.Principal, input 
 	})
 }
 
+func (s *Service) UpdateRoom(ctx context.Context, actor domain.Principal, input UpdateRoomInput) (domain.Room, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
+		return domain.Room{}, err
+	}
+	room, err := s.store.GetRoom(ctx, strings.TrimSpace(input.ID))
+	if err != nil {
+		return domain.Room{}, err
+	}
+	if err := auth.RequireBranch(actor, room.BranchID); err != nil {
+		return domain.Room{}, err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return domain.Room{}, domain.ErrInvalidInput
+	}
+	capacity := input.Capacity
+	if capacity <= 0 {
+		capacity = 1
+	}
+	room.Name = name
+	room.Capacity = capacity
+
+	return s.store.UpdateRoom(ctx, room)
+}
+
 func (s *Service) RemoveRoom(ctx context.Context, actor domain.Principal, id string) (domain.Room, error) {
 	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist); err != nil {
 		return domain.Room{}, err
@@ -898,6 +1368,22 @@ func normalizeBirthDate(value string) (string, error) {
 	}
 
 	return parsed.Format("02/01/2006"), nil
+}
+
+func isHireDateOnOrAfterBirthDate(birthDate string, hiredAt string) bool {
+	if birthDate == "" || hiredAt == "" {
+		return true
+	}
+	birth, err := time.Parse("02/01/2006", birthDate)
+	if err != nil {
+		return false
+	}
+	hire, err := time.Parse("02/01/2006", hiredAt)
+	if err != nil {
+		return false
+	}
+
+	return !hire.Before(birth)
 }
 
 func (s *Service) CreateScheduleItem(ctx context.Context, actor domain.Principal, input CreateScheduleItemInput) (domain.ScheduleItem, error) {

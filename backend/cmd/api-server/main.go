@@ -35,6 +35,7 @@ type applicationStore interface {
 	admin.Store
 	finance.Store
 	files.Store
+	httpapi.IdempotencyStore
 	notification.Store
 }
 
@@ -120,6 +121,7 @@ func main() {
 		fileService,
 		notificationService,
 		adminService,
+		deps.appStore,
 		log,
 		httpapi.Options{
 			RateLimitEnabled:   cfg.RateLimitEnabled,

@@ -6,23 +6,57 @@ import {
 } from "@/components/dashboard/role-dashboard-view";
 import { AppShell, type AppShellLabels } from "@/components/layout/app-shell";
 import {
+  AddTeacherForm,
+  type AddTeacherFormLabels,
+  type TeacherFormInitialData,
+} from "@/components/owner/add-teacher-form";
+import {
   BranchManagementView,
   type BranchManagementLabels,
 } from "@/components/owner/branch-management-view";
 import {
-  OwnerBranchWorkspace,
-  type BranchStats,
-  type OwnerOnboardingLabels,
+  TeacherFinanceHrView,
+  type TeacherFinanceHrLabels,
+} from "@/components/owner/teacher-finance-hr-view";
+import {
+  ReceptionistManagementView,
+  type ReceptionistManagementLabels,
+} from "@/components/owner/receptionist-management-view";
+import {
+  StudentAssignmentHubView,
+  type StudentAssignmentHubLabels,
+} from "@/components/owner/student-assignment-hub-view";
+import {
+  AddStudentForm,
+  type AddStudentFormLabels,
+} from "@/components/owner/add-student-form";
+import type {
+  BranchStats,
+  OwnerOnboardingLabels,
 } from "@/components/owner/owner-branch-workspace";
 import {
   getDashboard,
+  getTeacher,
   getFileDownloadURL,
   listBranchProfileFiles,
   listBranches,
   listBranchStaff,
+  listSalaryModels,
+  listCourses,
+  listStudentAssignmentHub,
+  listTeacherFinanceRecords,
   listRooms,
 } from "@/lib/api/client";
-import type { Branch, StaffMember } from "@/lib/api/types";
+import type {
+  Branch,
+  SalaryModelType,
+  StaffMember,
+  StudentAssignmentHubPage,
+  StudentAssignmentHubRecord,
+  StudentStatus,
+  TeacherFinanceRecord,
+  TeacherStatus,
+} from "@/lib/api/types";
 import { requireAuthContext } from "@/lib/auth/session";
 import { dashboardPathForRole, isRole } from "@/lib/navigation/roles";
 
@@ -33,6 +67,13 @@ type RoleDashboardPageProps = {
   }>;
   searchParams: Promise<{
     branch_id?: string;
+    limit?: string;
+    offset?: string;
+    q?: string;
+    salary_model?: string;
+    status?: string;
+    subject?: string;
+    teacher_id?: string;
     view?: string;
   }>;
 };
@@ -42,6 +83,9 @@ type DashboardMessages = AppShellLabels & {
   owner: {
     branchManagement: BranchManagementLabels;
     onboarding: OwnerOnboardingLabels;
+    receptionistManagement: ReceptionistManagementLabels;
+    studentAssignmentHub: StudentAssignmentHubLabels & AddStudentFormLabels;
+    teacherFinanceHr: TeacherFinanceHrLabels & AddTeacherFormLabels;
   };
 };
 
@@ -52,7 +96,17 @@ export default async function RoleDashboardPage({
   searchParams,
 }: RoleDashboardPageProps) {
   const { locale, role } = await params;
-  const { branch_id: branchID, view } = await searchParams;
+  const {
+    branch_id: branchID,
+    limit,
+    offset,
+    q,
+    salary_model: salaryModel,
+    status,
+    subject,
+    teacher_id: teacherID,
+    view,
+  } = await searchParams;
   setRequestLocale(locale);
   if (!isRole(role)) {
     notFound();
@@ -88,8 +142,13 @@ export default async function RoleDashboardPage({
     const selectedBranch = branchID
       ? branches.find((branch) => branch.id === branchID)
       : undefined;
-    const allBranchesSelected = branchID === "all";
     const branchManagementSelected = view === "branches";
+    const addTeacherSelected = view === "teacher-add";
+    const editTeacherSelected = view === "teacher-edit" && teacherID;
+    const receptionistManagementSelected = view === "receptionists";
+    const studentAssignmentHubSelected = view === "student-assignment";
+    const addStudentSelected = view === "student-add";
+    const teacherFinanceSelected = view === "teacher-finance";
 
     if (branchManagementSelected) {
       const rooms = await listRooms(token);
@@ -114,18 +173,123 @@ export default async function RoleDashboardPage({
       );
     }
 
-    if (!selectedBranch && !allBranchesSelected) {
+    if (addTeacherSelected) {
       return (
-        <OwnerBranchWorkspace
-          branches={branches}
-          labels={{
-            common: messages.common,
-            onboarding: messages.owner.onboarding,
-          }}
-          locale={locale}
-          stats={branchStats}
-          userName={`${session.user.first_name} ${session.user.last_name}`}
-        />
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <AddTeacherForm
+            branches={branches}
+            labels={messages.owner.teacherFinanceHr}
+            locale={locale}
+          />
+        </AppShell>
+      );
+    }
+
+    if (editTeacherSelected) {
+      const initialTeacher = await buildTeacherInitialData(teacherID, token);
+      return (
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <AddTeacherForm
+            branches={branches}
+            initialTeacher={initialTeacher}
+            labels={messages.owner.teacherFinanceHr}
+            locale={locale}
+          />
+        </AppShell>
+      );
+    }
+
+    if (teacherFinanceSelected) {
+      const teacherBranchID =
+        branchID && branchID !== "all" ? branchID : undefined;
+      const filters = {
+        branch_id: teacherBranchID,
+        subject,
+        status: parseTeacherStatus(status),
+        salary_model: parseSalaryModel(salaryModel),
+      };
+      const records = await listTeacherFinanceRecords(filters, token);
+      const recordsWithPhotos = await Promise.all(
+        records.map((record) => attachTeacherFinancePhoto(record, token)),
+      );
+      return (
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <TeacherFinanceHrView
+            branches={branches}
+            filters={filters}
+            labels={messages.owner.teacherFinanceHr}
+            locale={locale}
+            records={recordsWithPhotos}
+          />
+        </AppShell>
+      );
+    }
+
+    if (receptionistManagementSelected) {
+      const staff = (
+        await Promise.all(
+          branches.map((branch) => listBranchStaff(branch.id, token)),
+        )
+      ).flat();
+      const staffWithPhotos = await Promise.all(
+        staff.map((member) => attachStaffPhoto(member, token)),
+      );
+      return (
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <ReceptionistManagementView
+            branches={branches}
+            labels={messages.owner.receptionistManagement}
+            staff={staffWithPhotos}
+          />
+        </AppShell>
+      );
+    }
+
+    if (addStudentSelected) {
+      const [courses, teacherRecords] = await Promise.all([
+        listCourses(token),
+        listTeacherFinanceRecords({}, token),
+      ]);
+      return (
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <AddStudentForm
+            branches={branches}
+            courses={courses}
+            labels={messages.owner.studentAssignmentHub}
+            locale={locale}
+            teachers={teacherRecords}
+          />
+        </AppShell>
+      );
+    }
+
+    if (studentAssignmentHubSelected) {
+      const pageSize = parsePositiveInt(limit, 20);
+      const pageOffset = parseNonNegativeInt(offset, 0);
+      const filters = {
+        branch_id: branchID && branchID !== "all" ? branchID : undefined,
+        limit: pageSize,
+        offset: pageOffset,
+        q,
+        status: parseStudentStatus(status),
+        teacher_id: teacherID,
+      };
+      const [studentPage, teacherRecords] = await Promise.all([
+        listStudentAssignmentHub(filters, token),
+        listTeacherFinanceRecords({}, token),
+      ]);
+      const studentPageWithPhotos = await attachStudentHubPhotos(studentPage, token);
+      return (
+        <AppShell labels={shellLabels} locale={locale} session={session}>
+          <StudentAssignmentHubView
+            branches={branches}
+            filters={filters}
+            initialPage={studentPageWithPhotos}
+            labels={messages.owner.studentAssignmentHub}
+            locale={locale}
+            teachers={teacherRecords}
+          />
+        </AppShell>
       );
     }
 
@@ -143,7 +307,7 @@ export default async function RoleDashboardPage({
       >
         <RoleDashboardView
           commonLabels={messages.common}
-          activeBranchID={allBranchesSelected ? "all" : selectedBranch?.id}
+          activeBranchID={selectedBranch?.id ?? "all"}
           dashboard={dashboard}
           labels={messages.dashboard}
           locale={locale}
@@ -173,6 +337,121 @@ export default async function RoleDashboardPage({
   );
 }
 
+function parseTeacherStatus(value?: string): TeacherStatus | undefined {
+  if (
+    value === "pending_owner_approval" ||
+    value === "active" ||
+    value === "terminated"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function parseStudentStatus(value?: string): StudentStatus | undefined {
+  if (value === "active" || value === "left" || value === "graduated") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function parseSalaryModel(value?: string): SalaryModelType | undefined {
+  if (value === "fixed" || value === "percent" || value === "hybrid") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function parseNonNegativeInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+async function buildTeacherInitialData(
+  teacherID: string,
+  token: string,
+): Promise<TeacherFormInitialData> {
+  const teacher = await getTeacher(teacherID, token);
+  const [records, salaryModels] = await Promise.all([
+    listTeacherFinanceRecords({ branch_id: teacher.branch_id }, token),
+    listSalaryModels(token, teacher.branch_id),
+  ]);
+  const record = records.find((item) => item.id === teacher.id);
+  if (!record) {
+    notFound();
+  }
+  const salaryModel = salaryModels.find(
+    (model) => model.teacher_id === teacher.id,
+  );
+  const photoURL = teacher.profile_photo_file_id
+    ? await getTeacherPhotoURL(teacher.profile_photo_file_id, token)
+    : "";
+
+  return {
+    address: teacher.address,
+    birth_date: teacher.birth_date,
+    branch_id: teacher.branch_id,
+    email: record.email,
+    first_name: record.first_name,
+    gender: teacher.gender,
+    id: teacher.id,
+    last_name: record.last_name,
+    percentage:
+      salaryModel?.student_percent_basis_points !== undefined
+        ? formatPercentForInput(salaryModel.student_percent_basis_points)
+        : "",
+    phone: teacher.phone,
+    profile_photo_file_id: teacher.profile_photo_file_id,
+    profile_photo_url: photoURL,
+    salary_amount:
+      salaryModel?.fixed_monthly_amount_cents !== undefined
+        ? formatCentsForInput(salaryModel.fixed_monthly_amount_cents)
+        : "",
+    salary_model: salaryModel?.model_type ?? record.salary_type ?? "fixed",
+    subjects: splitSubjects(record.subject),
+  };
+}
+
+async function getTeacherPhotoURL(fileID: string, token: string) {
+  try {
+    const download = await getFileDownloadURL(fileID, token);
+    return download.url;
+  } catch {
+    return "";
+  }
+}
+
+function splitSubjects(value?: string) {
+  return (value ?? "")
+    .split(",")
+    .map((subject) => subject.trim())
+    .filter(Boolean);
+}
+
+function formatCentsForInput(value: number) {
+  const amount = value / 100;
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
+function formatPercentForInput(value: number) {
+  const amount = value / 100;
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
 async function attachStaffPhoto(
   staff: StaffMember,
   token: string,
@@ -185,6 +464,46 @@ async function attachStaffPhoto(
     return { ...staff, profile_photo_url: download.url };
   } catch {
     return staff;
+  }
+}
+
+async function attachTeacherFinancePhoto(
+  record: TeacherFinanceRecord,
+  token: string,
+): Promise<TeacherFinanceRecord> {
+  if (!record.profile_photo_file_id) {
+    return record;
+  }
+  try {
+    const download = await getFileDownloadURL(record.profile_photo_file_id, token);
+    return { ...record, profile_photo_url: download.url };
+  } catch {
+    return record;
+  }
+}
+
+async function attachStudentHubPhotos(
+  page: StudentAssignmentHubPage,
+  token: string,
+): Promise<StudentAssignmentHubPage> {
+  const items = await Promise.all(
+    page.items.map((student) => attachStudentHubPhoto(student, token)),
+  );
+  return { ...page, items };
+}
+
+async function attachStudentHubPhoto(
+  student: StudentAssignmentHubRecord,
+  token: string,
+): Promise<StudentAssignmentHubRecord> {
+  if (!student.profile_photo_file_id) {
+    return student;
+  }
+  try {
+    const download = await getFileDownloadURL(student.profile_photo_file_id, token);
+    return { ...student, profile_photo_url: download.url };
+  } catch {
+    return student;
   }
 }
 

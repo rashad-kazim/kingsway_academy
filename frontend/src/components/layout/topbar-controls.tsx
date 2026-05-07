@@ -45,8 +45,9 @@ export type ChromeLabels = {
 type TopbarControlsProps = {
   labels: ChromeLabels;
   locale: string;
-  role: Role;
-  userName: string;
+  role?: Role;
+  showProfile?: boolean;
+  userName?: string;
 };
 
 const localeOptions: ChromeLanguageCode[] = ["en", "az", "ru", "de"];
@@ -55,6 +56,7 @@ export function TopbarControls({
   labels,
   locale,
   role,
+  showProfile = true,
   userName,
 }: TopbarControlsProps) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -122,55 +124,103 @@ export function TopbarControls({
         </span>
       </button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={labels.profileMenu}
-            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left text-white transition-colors hover:bg-white/10 dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]"
-            type="button"
-          >
-            <Avatar className="size-10">
-              <AvatarFallback className="bg-white text-sm font-black text-[#0a284b]">
-                {initials(userName)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="hidden min-w-0 flex-col leading-tight lg:flex">
-              <span className="max-w-44 truncate text-sm font-bold">
-                {userName}
-              </span>
-              <span className="mt-0.5 text-xs font-medium text-white/70 dark:text-[#a7b0bf]">
-                {labels.roles[role]}
-              </span>
-            </span>
-            <ChevronDown className="size-4 text-white/75 dark:text-[#a7b0bf]" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="z-[1100] min-w-48">
-          <div className="px-2 py-1.5">
-            <div className="truncate text-sm font-semibold">{userName}</div>
-            <div className="text-xs text-muted-foreground">
-              {labels.roles[role]}
-            </div>
-          </div>
-          <DropdownMenuSeparator />
-          <form action={logoutAction}>
-            <input name="locale" type="hidden" value={locale} />
-            <DropdownMenuItem
-              asChild
-              className="cursor-pointer transition-colors focus:text-[#ef2334] data-[highlighted]:text-[#ef2334] dark:focus:text-[#ff3b4f] dark:data-[highlighted]:text-[#ff3b4f]"
-            >
-              <button
-                className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:text-[#ef2334] focus:text-[#ef2334] dark:hover:text-[#ff3b4f] dark:focus:text-[#ff3b4f] [&_svg]:transition-colors"
-                type="submit"
-              >
-                <LogOut className="size-4" />
-                {labels.signOut}
-              </button>
-            </DropdownMenuItem>
-          </form>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {showProfile && role && userName ? (
+        <ProfileMenu
+          labels={labels}
+          locale={locale}
+          role={role}
+          userName={userName}
+        />
+      ) : null}
     </div>
+  );
+}
+
+export function ProfileMenu({
+  labels,
+  locale,
+  open = true,
+  role,
+  userName,
+  variant = "topbar",
+}: {
+  labels: ChromeLabels;
+  locale: string;
+  open?: boolean;
+  role: Role;
+  userName: string;
+  variant?: "topbar" | "sidebar";
+}) {
+  const sidebar = variant === "sidebar";
+  const showText = !sidebar || open;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label={labels.profileMenu}
+          className={cn(
+            "flex cursor-pointer items-center gap-3 rounded-md text-left text-white transition-colors hover:bg-white/10 dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]",
+            sidebar ? "h-14 w-full px-3" : "px-2 py-1.5",
+            sidebar && !open && "h-12 justify-center px-0",
+          )}
+          type="button"
+        >
+          <Avatar className="size-10 shrink-0">
+            <AvatarFallback className="bg-white text-sm font-black text-[#0a284b]">
+              {initials(userName)}
+            </AvatarFallback>
+          </Avatar>
+          {showText ? (
+            <>
+              <span
+                className={cn(
+                  "min-w-0 flex-col leading-tight",
+                  sidebar ? "flex" : "hidden lg:flex",
+                )}
+              >
+                <span className="max-w-44 truncate text-sm font-bold">
+                  {userName}
+                </span>
+                <span className="mt-0.5 text-xs font-medium text-white/70 dark:text-[#a7b0bf]">
+                  {labels.roles[role]}
+                </span>
+              </span>
+              <ChevronDown className="ml-auto size-4 shrink-0 text-white/75 dark:text-[#a7b0bf]" />
+            </>
+          ) : null}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={sidebar ? "start" : "end"}
+        className="z-[1100] min-w-48"
+        side={sidebar ? "right" : "bottom"}
+        sideOffset={10}
+      >
+        <div className="px-2 py-1.5">
+          <div className="truncate text-sm font-semibold">{userName}</div>
+          <div className="text-xs text-muted-foreground">
+            {labels.roles[role]}
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <form action={logoutAction}>
+          <input name="locale" type="hidden" value={locale} />
+          <DropdownMenuItem
+            asChild
+            className="cursor-pointer transition-colors focus:text-[#ef2334] data-[highlighted]:text-[#ef2334] data-[highlighted]:[&_svg]:text-[#ef2334] dark:focus:text-[#ff3b4f] dark:data-[highlighted]:text-[#ff3b4f] dark:data-[highlighted]:[&_svg]:text-[#ff3b4f]"
+          >
+            <button
+              className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:text-[#ef2334] focus:text-[#ef2334] dark:hover:text-[#ff3b4f] dark:focus:text-[#ff3b4f] [&_svg]:stroke-current [&_svg]:transition-colors"
+              type="submit"
+            >
+              <LogOut className="size-4" />
+              {labels.signOut}
+            </button>
+          </DropdownMenuItem>
+        </form>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
