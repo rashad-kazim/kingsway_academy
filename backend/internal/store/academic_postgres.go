@@ -22,7 +22,7 @@ func (p *Postgres) CreateClass(ctx context.Context, class domain.Class) (domain.
 		return domain.Class{}, err
 	}
 
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		INSERT INTO classes (branch_id, course_id, teacher_id, name, start_date, end_date, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6, true)
 		RETURNING id::text, branch_id::text, course_id::text, teacher_id::text, name,
@@ -38,7 +38,7 @@ func (p *Postgres) CreateClass(ctx context.Context, class domain.Class) (domain.
 }
 
 func (p *Postgres) GetClass(ctx context.Context, id string) (domain.Class, error) {
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		SELECT id::text, branch_id::text, course_id::text, teacher_id::text, name,
 			start_date, end_date, is_active, created_at, updated_at
 		FROM classes
@@ -54,7 +54,7 @@ func (p *Postgres) GetClass(ctx context.Context, id string) (domain.Class, error
 }
 
 func (p *Postgres) ListClasses(ctx context.Context, branchID string) ([]domain.Class, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, course_id::text, teacher_id::text, name,
 			start_date, end_date, is_active, created_at, updated_at
 		FROM classes
@@ -81,6 +81,53 @@ func (p *Postgres) ListClasses(ctx context.Context, branchID string) ([]domain.C
 	return classes, nil
 }
 
+func (p *Postgres) ListClassesPage(ctx context.Context, branchID string, active *bool, page domain.PageRequest) ([]domain.Class, int, error) {
+	page = normalizePage(page)
+	activeSet := active != nil
+	activeValue := false
+	if active != nil {
+		activeValue = *active
+	}
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM classes
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = false OR is_active = $3)
+	`, branchID, activeSet, activeValue).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, branch_id::text, course_id::text, teacher_id::text, name,
+			start_date, end_date, is_active, created_at, updated_at
+		FROM classes
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = false OR is_active = $3)
+		ORDER BY start_date DESC, name
+		LIMIT $4 OFFSET $5
+	`, branchID, activeSet, activeValue, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	classes := make([]domain.Class, 0, page.Limit)
+	for rows.Next() {
+		class, err := scanClass(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		classes = append(classes, class)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return classes, total, nil
+}
+
 func (p *Postgres) EnrollStudent(ctx context.Context, enrollment domain.ClassStudent) (domain.ClassStudent, error) {
 	if enrollment.ClassID == "" || enrollment.StudentID == "" || enrollment.JoinedAt.IsZero() {
 		return domain.ClassStudent{}, domain.ErrInvalidInput
@@ -92,7 +139,7 @@ func (p *Postgres) EnrollStudent(ctx context.Context, enrollment domain.ClassStu
 		return domain.ClassStudent{}, err
 	}
 
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		INSERT INTO class_students (branch_id, class_id, student_id, joined_at, left_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id::text, branch_id::text, class_id::text, student_id::text, joined_at, left_at, created_at
@@ -107,7 +154,7 @@ func (p *Postgres) EnrollStudent(ctx context.Context, enrollment domain.ClassStu
 }
 
 func (p *Postgres) ListClassStudents(ctx context.Context, branchID string, classID string) ([]domain.ClassStudent, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, class_id::text, student_id::text, joined_at, left_at, created_at
 		FROM class_students
 		WHERE ($1 = '' OR branch_id = $1::uuid)
@@ -134,6 +181,47 @@ func (p *Postgres) ListClassStudents(ctx context.Context, branchID string, class
 	return enrollments, nil
 }
 
+func (p *Postgres) ListClassStudentsPage(ctx context.Context, branchID string, classID string, page domain.PageRequest) ([]domain.ClassStudent, int, error) {
+	page = normalizePage(page)
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM class_students
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+	`, branchID, classID).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, branch_id::text, class_id::text, student_id::text, joined_at, left_at, created_at
+		FROM class_students
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+		ORDER BY joined_at DESC, created_at DESC
+		LIMIT $3 OFFSET $4
+	`, branchID, classID, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	enrollments := make([]domain.ClassStudent, 0, page.Limit)
+	for rows.Next() {
+		enrollment, err := scanClassStudent(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		enrollments = append(enrollments, enrollment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return enrollments, total, nil
+}
+
 func (p *Postgres) CreateAssignment(ctx context.Context, assignment domain.Assignment) (domain.Assignment, error) {
 	if strings.TrimSpace(assignment.Title) == "" || assignment.ClassID == "" || assignment.CreatedByUserID == "" {
 		return domain.Assignment{}, domain.ErrInvalidInput
@@ -146,7 +234,7 @@ func (p *Postgres) CreateAssignment(ctx context.Context, assignment domain.Assig
 		return domain.Assignment{}, domain.ErrInvalidInput
 	}
 
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		INSERT INTO assignments (
 			branch_id, class_id, title, description, due_at, material_file_id, created_by_user_id
 		)
@@ -164,7 +252,7 @@ func (p *Postgres) CreateAssignment(ctx context.Context, assignment domain.Assig
 }
 
 func (p *Postgres) ListAssignments(ctx context.Context, branchID string, classID string) ([]domain.Assignment, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, class_id::text, title, description,
 			due_at, coalesce(material_file_id::text, ''), created_by_user_id::text, created_at, updated_at
 		FROM assignments
@@ -192,6 +280,48 @@ func (p *Postgres) ListAssignments(ctx context.Context, branchID string, classID
 	return assignments, nil
 }
 
+func (p *Postgres) ListAssignmentsPage(ctx context.Context, branchID string, classID string, page domain.PageRequest) ([]domain.Assignment, int, error) {
+	page = normalizePage(page)
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM assignments
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+	`, branchID, classID).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, branch_id::text, class_id::text, title, description,
+			due_at, coalesce(material_file_id::text, ''), created_by_user_id::text, created_at, updated_at
+		FROM assignments
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+		ORDER BY coalesce(due_at, created_at) DESC
+		LIMIT $3 OFFSET $4
+	`, branchID, classID, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	assignments := make([]domain.Assignment, 0, page.Limit)
+	for rows.Next() {
+		assignment, err := scanAssignment(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		assignments = append(assignments, assignment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return assignments, total, nil
+}
+
 func (p *Postgres) CreateExam(ctx context.Context, exam domain.Exam, participantStudentIDs []string) (domain.Exam, []domain.ExamParticipant, error) {
 	if strings.TrimSpace(exam.Title) == "" || exam.CourseID == "" || exam.CreatedByUserID == "" {
 		return domain.Exam{}, nil, domain.ErrInvalidInput
@@ -209,55 +339,54 @@ func (p *Postgres) CreateExam(ctx context.Context, exam domain.Exam, participant
 		}
 	}
 
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return domain.Exam{}, nil, mapPostgresError(err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	row := tx.QueryRow(ctx, `
-		INSERT INTO exams (branch_id, course_id, class_id, schedule_item_id, title, created_by_user_id)
-		VALUES ($1, $2, nullif($3, '')::uuid, nullif($4, '')::uuid, $5, $6)
-		RETURNING id::text, branch_id::text, course_id::text, coalesce(class_id::text, ''),
-			coalesce(schedule_item_id::text, ''), title, created_by_user_id::text, created_at, updated_at
-	`, exam.BranchID, exam.CourseID, exam.ClassID, exam.ScheduleItemID, strings.TrimSpace(exam.Title), exam.CreatedByUserID)
-
-	created, err := scanExam(row)
-	if err != nil {
-		return domain.Exam{}, nil, mapPostgresError(err)
-	}
-
+	var created domain.Exam
 	participants := make([]domain.ExamParticipant, 0, len(participantStudentIDs))
-	for _, studentID := range participantStudentIDs {
-		studentID = strings.TrimSpace(studentID)
-		if studentID == "" {
-			continue
-		}
-		if err := p.ensureStudentBranchTx(ctx, tx, studentID, exam.BranchID); err != nil {
-			return domain.Exam{}, nil, err
-		}
+	err := p.withTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
-			INSERT INTO exam_participants (exam_id, student_id, branch_id, rsvp_status)
-			VALUES ($1, $2, $3, 'pending')
-			ON CONFLICT (exam_id, student_id) DO UPDATE SET rsvp_status = exam_participants.rsvp_status
-			RETURNING exam_id::text, student_id::text, branch_id::text, rsvp_status
-		`, created.ID, studentID, exam.BranchID)
-		participant, err := scanExamParticipant(row)
-		if err != nil {
-			return domain.Exam{}, nil, mapPostgresError(err)
-		}
-		participants = append(participants, participant)
-	}
+			INSERT INTO exams (branch_id, course_id, class_id, schedule_item_id, title, created_by_user_id)
+			VALUES ($1, $2, nullif($3, '')::uuid, nullif($4, '')::uuid, $5, $6)
+			RETURNING id::text, branch_id::text, course_id::text, coalesce(class_id::text, ''),
+				coalesce(schedule_item_id::text, ''), title, created_by_user_id::text, created_at, updated_at
+		`, exam.BranchID, exam.CourseID, exam.ClassID, exam.ScheduleItemID, strings.TrimSpace(exam.Title), exam.CreatedByUserID)
 
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Exam{}, nil, mapPostgresError(err)
+		next, err := scanExam(row)
+		if err != nil {
+			return mapPostgresError(err)
+		}
+		created = next
+
+		for _, studentID := range participantStudentIDs {
+			studentID = strings.TrimSpace(studentID)
+			if studentID == "" {
+				continue
+			}
+			if err := p.ensureStudentBranchTx(ctx, tx, studentID, exam.BranchID); err != nil {
+				return err
+			}
+			row := tx.QueryRow(ctx, `
+				INSERT INTO exam_participants (exam_id, student_id, branch_id, rsvp_status)
+				VALUES ($1, $2, $3, 'pending')
+				ON CONFLICT (exam_id, student_id) DO UPDATE SET rsvp_status = exam_participants.rsvp_status
+				RETURNING exam_id::text, student_id::text, branch_id::text, rsvp_status
+			`, created.ID, studentID, exam.BranchID)
+			participant, err := scanExamParticipant(row)
+			if err != nil {
+				return mapPostgresError(err)
+			}
+			participants = append(participants, participant)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return domain.Exam{}, nil, err
 	}
 
 	return created, participants, nil
 }
 
 func (p *Postgres) GetExam(ctx context.Context, id string) (domain.Exam, error) {
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		SELECT id::text, branch_id::text, course_id::text, coalesce(class_id::text, ''),
 			coalesce(schedule_item_id::text, ''), title, created_by_user_id::text, created_at, updated_at
 		FROM exams
@@ -273,7 +402,7 @@ func (p *Postgres) GetExam(ctx context.Context, id string) (domain.Exam, error) 
 }
 
 func (p *Postgres) ListExams(ctx context.Context, branchID string, classID string) ([]domain.Exam, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, course_id::text, coalesce(class_id::text, ''),
 			coalesce(schedule_item_id::text, ''), title, created_by_user_id::text, created_at, updated_at
 		FROM exams
@@ -301,6 +430,48 @@ func (p *Postgres) ListExams(ctx context.Context, branchID string, classID strin
 	return exams, nil
 }
 
+func (p *Postgres) ListExamsPage(ctx context.Context, branchID string, classID string, page domain.PageRequest) ([]domain.Exam, int, error) {
+	page = normalizePage(page)
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM exams
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+	`, branchID, classID).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, branch_id::text, course_id::text, coalesce(class_id::text, ''),
+			coalesce(schedule_item_id::text, ''), title, created_by_user_id::text, created_at, updated_at
+		FROM exams
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR class_id = $2::uuid)
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
+	`, branchID, classID, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	exams := make([]domain.Exam, 0, page.Limit)
+	for rows.Next() {
+		exam, err := scanExam(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		exams = append(exams, exam)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return exams, total, nil
+}
+
 func (p *Postgres) CreateExamResult(ctx context.Context, result domain.ExamResult) (domain.ExamResult, error) {
 	if result.ExamID == "" || result.StudentID == "" || result.CategoryID == "" || result.EnteredByTeacherID == "" {
 		return domain.ExamResult{}, domain.ErrInvalidInput
@@ -309,7 +480,7 @@ func (p *Postgres) CreateExamResult(ctx context.Context, result domain.ExamResul
 		return domain.ExamResult{}, err
 	}
 
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		INSERT INTO exam_results (
 			branch_id, exam_id, student_id, category_id, score, feedback, document_file_id, entered_by_teacher_id
 		)
@@ -333,7 +504,7 @@ func (p *Postgres) CreateExamResult(ctx context.Context, result domain.ExamResul
 }
 
 func (p *Postgres) ListExamResults(ctx context.Context, branchID string, examID string, studentID string) ([]domain.ExamResult, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, exam_id::text, student_id::text, category_id::text,
 			score, coalesce(feedback, ''), coalesce(document_file_id::text, ''), entered_by_teacher_id::text, created_at, updated_at
 		FROM exam_results
@@ -362,10 +533,54 @@ func (p *Postgres) ListExamResults(ctx context.Context, branchID string, examID 
 	return results, nil
 }
 
+func (p *Postgres) ListExamResultsPage(ctx context.Context, branchID string, examID string, studentID string, page domain.PageRequest) ([]domain.ExamResult, int, error) {
+	page = normalizePage(page)
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM exam_results
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR exam_id = $2::uuid)
+			AND ($3 = '' OR student_id = $3::uuid)
+	`, branchID, examID, studentID).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, branch_id::text, exam_id::text, student_id::text, category_id::text,
+			score, coalesce(feedback, ''), coalesce(document_file_id::text, ''), entered_by_teacher_id::text, created_at, updated_at
+		FROM exam_results
+		WHERE ($1 = '' OR branch_id = $1::uuid)
+			AND ($2 = '' OR exam_id = $2::uuid)
+			AND ($3 = '' OR student_id = $3::uuid)
+		ORDER BY created_at DESC
+		LIMIT $4 OFFSET $5
+	`, branchID, examID, studentID, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	results := make([]domain.ExamResult, 0, page.Limit)
+	for rows.Next() {
+		result, err := scanExamResult(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return results, total, nil
+}
+
 func (p *Postgres) AcademicDashboard(ctx context.Context, branchID string) (domain.AcademicDashboard, error) {
 	var dashboard domain.AcademicDashboard
 	dashboard.BranchID = branchID
-	err := p.pool.QueryRow(ctx, `
+	err := p.queryRow(ctx, `
 		SELECT
 			(SELECT count(*) FROM students WHERE ($1 = '' OR branch_id = $1::uuid) AND status = 'active'),
 			(SELECT count(*) FROM teachers WHERE ($1 = '' OR branch_id = $1::uuid) AND status = 'active'),
@@ -517,7 +732,7 @@ func (p *Postgres) ensureCourseTeacherBranch(ctx context.Context, courseID strin
 
 func (p *Postgres) ensureCourseBranch(ctx context.Context, courseID string, branchID string) error {
 	var found string
-	err := p.pool.QueryRow(ctx, `SELECT branch_id::text FROM courses WHERE id = $1`, courseID).Scan(&found)
+	err := p.queryRow(ctx, `SELECT branch_id::text FROM courses WHERE id = $1`, courseID).Scan(&found)
 	if err != nil {
 		return mapPostgresError(err)
 	}
@@ -560,7 +775,7 @@ func (p *Postgres) ensureStudentBranchTx(ctx context.Context, tx pgx.Tx, student
 func (p *Postgres) ensureExamResultBranch(ctx context.Context, result domain.ExamResult) error {
 	var examBranch string
 	var courseID string
-	err := p.pool.QueryRow(ctx, `SELECT branch_id::text, course_id::text FROM exams WHERE id = $1`, result.ExamID).Scan(&examBranch, &courseID)
+	err := p.queryRow(ctx, `SELECT branch_id::text, course_id::text FROM exams WHERE id = $1`, result.ExamID).Scan(&examBranch, &courseID)
 	if err != nil {
 		return mapPostgresError(err)
 	}
@@ -582,7 +797,7 @@ func (p *Postgres) ensureExamResultBranch(ctx context.Context, result domain.Exa
 
 	var minScore float64
 	var maxScore float64
-	err = p.pool.QueryRow(ctx, `
+	err = p.queryRow(ctx, `
 		SELECT min_score, max_score
 		FROM course_score_categories
 		WHERE id = $1 AND course_id = $2 AND branch_id = $3

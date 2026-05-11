@@ -9,6 +9,14 @@ const (
 	FileCategorySpecial  FileCategory = "special"
 )
 
+type FilePolicy string
+
+const (
+	FilePolicyStandardUI           FilePolicy = "standard-ui"
+	FilePolicyStandardDownloadable FilePolicy = "standard-downloadable"
+	FilePolicySpecial              FilePolicy = "special"
+)
+
 type FilePurpose string
 
 const (
@@ -38,6 +46,32 @@ func (c FileCategory) CanOptimize() bool {
 
 func (c FileCategory) MustPreserveOriginalBytes() bool {
 	return c == FileCategorySpecial
+}
+
+func (p FilePolicy) IsValid() bool {
+	switch p {
+	case FilePolicyStandardUI, FilePolicyStandardDownloadable, FilePolicySpecial:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p FilePolicy) Category() FileCategory {
+	if p == FilePolicySpecial {
+		return FileCategorySpecial
+	}
+	return FileCategoryStandard
+}
+
+func InferFilePolicy(category FileCategory, purpose FilePurpose) FilePolicy {
+	if category == FileCategorySpecial {
+		return FilePolicySpecial
+	}
+	if purpose == FilePurposeProfile {
+		return FilePolicyStandardUI
+	}
+	return FilePolicyStandardDownloadable
 }
 
 func RetentionUntil(purpose FilePurpose, uploadedAt time.Time) *time.Time {

@@ -52,6 +52,7 @@ test.describe("Owner regression smoke flows", () => {
     const runID = Date.now().toString(36);
     const photoPath = await createTestPNG(testInfo);
     const token = await backendLogin(request);
+    await cleanupSmokeBranches(request, token);
 
     const branchName = `E2E Branch ${runID}`;
     const branchAddress = `E2E Address ${runID}`;
@@ -77,11 +78,11 @@ test.describe("Owner regression smoke flows", () => {
     const studentFIN = makeFIN(runID, 0);
     let branchID = "";
 
-    await loginAsOwner(page);
-    await logoutFromSidebar(page);
-    await loginAsOwner(page);
-
     try {
+      await loginAsOwner(page);
+      await logoutFromSidebar(page);
+      await loginAsOwner(page);
+
       await createBranch(page, branchName, branchAddress, photoPath, true);
       const branch = await findBranchByName(request, token, branchName);
       branchID = branch.id;
@@ -155,9 +156,7 @@ test.describe("Owner regression smoke flows", () => {
 
       expect(runtimeErrors).toEqual([]);
     } finally {
-      if (branchID) {
-        await apiDelete(request, token, `/v1/branches/${branchID}`).catch(() => undefined);
-      }
+      await cleanupSmokeBranches(request, token, runID, branchID);
     }
   });
 });
@@ -615,6 +614,38 @@ async function apiDelete(request: APIRequestContext, token: string, path: string
   });
   expect(response.status()).toBeLessThan(500);
   return response;
+}
+
+async function cleanupSmokeBranches(
+  request: APIRequestContext,
+  token: string,
+  runID?: string,
+  knownBranchID?: string,
+) {
+  const deleted = new Set<string>();
+
+  if (knownBranchID) {
+    await apiDelete(request, token, `/v1/branches/${knownBranchID}`).catch(() => undefined);
+    deleted.add(knownBranchID);
+  }
+
+  const branches = await apiGet<ApiBranch[]>(request, token, "/v1/branches");
+  const smokePrefixes = ["E2E Branch ", "E2E Replay ", "E2E Concurrent "];
+  const branchesToDelete = branches.filter((branch) => {
+    if (deleted.has(branch.id)) {
+      return false;
+    }
+    const isSmokeBranch = smokePrefixes.some((prefix) => branch.name.startsWith(prefix));
+    if (!isSmokeBranch) {
+      return false;
+    }
+    return !runID || branch.name.includes(runID);
+  });
+
+  for (const branch of branchesToDelete) {
+    await apiDelete(request, token, `/v1/branches/${branch.id}`);
+    deleted.add(branch.id);
+  }
 }
 
 async function findBranchByName(

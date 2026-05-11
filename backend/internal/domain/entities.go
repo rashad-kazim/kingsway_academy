@@ -23,9 +23,32 @@ type IdempotencyRecord struct {
 	ExpiresAt      time.Time         `json:"expires_at"`
 }
 
-type IdempotencyBeginResult struct {
-	Started bool              `json:"started"`
-	Record  IdempotencyRecord `json:"record"`
+type IdempotencyRunResult struct {
+	Replayed       bool   `json:"replayed"`
+	ResponseStatus int    `json:"response_status"`
+	ResponseBody   []byte `json:"response_body"`
+}
+
+type PageRequest struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+type AuditLog struct {
+	ID             string         `json:"id"`
+	ActorUserID    string         `json:"actor_user_id,omitempty"`
+	ActorRole      Role           `json:"actor_role"`
+	ActorBranchID  string         `json:"actor_branch_id,omitempty"`
+	Action         string         `json:"action"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       string         `json:"entity_id,omitempty"`
+	EntityBranchID string         `json:"entity_branch_id,omitempty"`
+	RequestID      string         `json:"request_id,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	BeforeJSON     map[string]any `json:"before_json,omitempty"`
+	AfterJSON      map[string]any `json:"after_json,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
 }
 
 type Branch struct {
@@ -48,6 +71,7 @@ type User struct {
 	FirstName    string    `json:"first_name"`
 	LastName     string    `json:"last_name"`
 	IsActive     bool      `json:"is_active"`
+	TokenVersion int       `json:"-"`
 	LastLoginAt  string    `json:"last_login_at,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -403,6 +427,7 @@ type FileObject struct {
 	OwnerType         string       `json:"owner_type"`
 	OwnerID           string       `json:"owner_id"`
 	Category          FileCategory `json:"category"`
+	Policy            FilePolicy   `json:"policy"`
 	Purpose           FilePurpose  `json:"purpose"`
 	OriginalFilename  string       `json:"original_filename"`
 	MimeType          string       `json:"mime_type"`

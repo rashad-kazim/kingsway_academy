@@ -17,12 +17,10 @@ import (
 const idempotencyKeyHeader = "Idempotency-Key"
 
 type IdempotencyStore interface {
-	BeginIdempotency(ctx context.Context, record domain.IdempotencyRecord) (domain.IdempotencyBeginResult, error)
-	CompleteIdempotency(ctx context.Context, actorUserID string, method string, path string, key string, responseStatus int, responseBody []byte) error
-	ClearIdempotency(ctx context.Context, actorUserID string, method string, path string, key string) error
+	RunIdempotent(ctx context.Context, record domain.IdempotencyRecord, execute func(context.Context) (int, []byte, error)) (domain.IdempotencyRunResult, error)
 }
 
-type idempotentJSONHandler func() (int, any, error)
+type idempotentJSONHandler func(context.Context) (int, any, error)
 
 func (s *Server) decodeIdempotentJSON(w http.ResponseWriter, r *http.Request, principal domain.Principal, out any, execute idempotentJSONHandler) {
 	raw, ok := decodeJSONBody(w, r, out)
@@ -32,10 +30,14 @@ func (s *Server) decodeIdempotentJSON(w http.ResponseWriter, r *http.Request, pr
 	s.writeIdempotentJSON(w, r, principal, raw, execute)
 }
 
+func (s *Server) writeIdempotentNoBodyJSON(w http.ResponseWriter, r *http.Request, principal domain.Principal, execute idempotentJSONHandler) {
+	s.writeIdempotentJSON(w, r, principal, []byte("{}"), execute)
+}
+
 func (s *Server) writeIdempotentJSON(w http.ResponseWriter, r *http.Request, principal domain.Principal, rawBody []byte, execute idempotentJSONHandler) {
 	key := strings.TrimSpace(r.Header.Get(idempotencyKeyHeader))
 	if key == "" || s.idem == nil {
-		writeJSONResult(w, execute)
+		writeJSONResult(w, r.Context(), execute)
 		return
 	}
 	if len(key) > 160 {
@@ -45,49 +47,35 @@ func (s *Server) writeIdempotentJSON(w http.ResponseWriter, r *http.Request, pri
 
 	hashBytes := sha256.Sum256(rawBody)
 	requestHash := hex.EncodeToString(hashBytes[:])
-	begin, err := s.idem.BeginIdempotency(r.Context(), domain.IdempotencyRecord{
+	result, err := s.idem.RunIdempotent(r.Context(), domain.IdempotencyRecord{
 		ActorUserID: principal.UserID,
 		Method:      r.Method,
 		Path:        r.URL.Path,
 		Key:         key,
 		RequestHash: requestHash,
 		ExpiresAt:   time.Now().UTC().Add(24 * time.Hour),
+	}, func(ctx context.Context) (int, []byte, error) {
+		status, body, err := execute(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		return status, payload, nil
 	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if !begin.Started {
-		if begin.Record.Status == domain.IdempotencyStatusCompleted && len(begin.Record.ResponseBody) > 0 {
-			writeRawJSON(w, begin.Record.ResponseStatus, begin.Record.ResponseBody)
-			return
-		}
-		writeError(w, domain.ErrConflict)
-		return
-	}
-
-	status, body, err := execute()
-	if err != nil {
-		_ = s.idem.ClearIdempotency(r.Context(), principal.UserID, r.Method, r.URL.Path, key)
-		writeError(w, err)
-		return
-	}
-	payload, err := json.Marshal(body)
-	if err != nil {
-		_ = s.idem.ClearIdempotency(r.Context(), principal.UserID, r.Method, r.URL.Path, key)
-		writeError(w, err)
-		return
-	}
-	if err := s.idem.CompleteIdempotency(r.Context(), principal.UserID, r.Method, r.URL.Path, key, status, payload); err != nil {
-		writeError(w, err)
-		return
-	}
-	writeRawJSON(w, status, payload)
+	writeRawJSON(w, result.ResponseStatus, result.ResponseBody)
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, out any) ([]byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -109,8 +97,8 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, out any) ([]byte, bo
 	return raw, true
 }
 
-func writeJSONResult(w http.ResponseWriter, execute idempotentJSONHandler) {
-	status, body, err := execute()
+func writeJSONResult(w http.ResponseWriter, ctx context.Context, execute idempotentJSONHandler) {
+	status, body, err := execute(ctx)
 	if err != nil {
 		writeError(w, err)
 		return

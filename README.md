@@ -2,6 +2,8 @@
 
 This file is the running memory for the project. At the start of each work session, read this file first. At the end of each work session, update it with what changed, what was deferred, and where to continue.
 
+Backend readiness planning is tracked separately in `Backend Readiness Sprint.md`; read that file only when working on backend architecture/readiness or resuming that sprint.
+
 ## Current Direction
 
 - Product: smart operation center for IELTS/SAT-focused education centers.
@@ -111,7 +113,7 @@ Only use Docker again after explicit instruction.
 - Salary privacy: only Owner and the related Teacher can see salary details; Receptionist cannot.
 - Swap fairness: teacher salary allocation follows the number of days each teacher taught.
 - File policy:
-  - Maximum upload size is 10 MB per file.
+  - Maximum upload size is 15 MB per file.
   - Before adding any new file upload UI, ask which category the upload belongs to and explain the upload-time optimization plus download-time behavior before writing code.
   - Lossy optimization cannot be reversed. If a file must later download in original visual/content quality, store the original or a content-preserving sanitized object; do not rely on reversing compression.
   - `standard` / "Sadece dosya": normal files. Safe optimization/compression may be applied later. If original download quality is required, store original plus optional optimized preview; do not rely on reversing compression.
@@ -213,14 +215,14 @@ Only use Docker again after explicit instruction.
   - Frontend-facing branch save errors are mapped to user-friendly UI messages instead of raw backend errors.
   - Branch photo save was corrected so the file input stays in the form and photos upload through the backend `/v1/files/upload` path into the existing files/MinIO flow instead of being frontend-only.
   - Owner branch lists now attach the latest backend-backed branch profile photo URL when rendering cards, and branch photo edits also upload through the same backend file path.
-  - Increased the local Next.js Server Action body limit to 12 MB and added frontend validation so branch photos must be images up to 10 MB.
-  - Backend `POST /v1/files/upload` now enforces the 10 MB maximum upload size.
+  - Increased the local Next.js Server Action body limit and added frontend validation so branch photos must be images up to the current upload limit.
+  - Backend `POST /v1/files/upload` now enforces the maximum upload size.
   - Verification after the branch photo fix: `npm run lint` and `npm run build` passed in `frontend/`.
-  - File upload policy was clarified: 10 MB max, `standard` means "Sadece dosya" and can later be safely optimized, `special` means "Cok onemli dosya" and must preserve original bytes/hash.
+  - File upload policy was clarified: `standard` means "Sadece dosya" and can later be safely optimized, `special` means "Cok onemli dosya" and must preserve original bytes/hash.
   - Backend image optimization for `standard` + `profile_photo` uploads was implemented: accepted source types are JPG/PNG/WebP, then auto-orientation, metadata stripping, center square crop, forced 768x768 output even for small images, and JPEG quality 85 storage.
   - File download policy was clarified: lossy compression is not reversible. Future downloadable optimized files must store the original object separately and return original bytes on download; profile photos are treated as UI-only optimized images.
   - Special-file policy was refined: Special PDFs may strip only non-content metadata, but page/content/visual meaning must not change; Special JPG/PNG/WebP images are not recompressed or quality-ratio converted.
-  - Owner first-branch photo upload was explicitly confirmed as `standard` + `profile_photo` / UI-avatar: JPG/PNG/WebP only, 10 MB max, no original-download promise, backend optimized to 768x768 JPEG quality 85.
+  - Owner first-branch photo upload was explicitly confirmed as `standard` + `profile_photo` / UI-avatar: JPG/PNG/WebP only, no original-download promise, backend optimized to 768x768 JPEG quality 85.
   - Owner first-branch photo picker now validates file type/size before previewing the image, and the backend rejects unsupported `profile_photo` image MIME types.
 - Owner Branch Management edit flow completed 2026-05-03:
   - Branch detail editing no longer opens in a drawer; clicking a branch row opens a full content-area edit page inside Branch Management.
@@ -601,7 +603,7 @@ Only use Docker again after explicit instruction.
   - 2026-05-03 owner Branch Management view:
     - Sidebar Branch Management now opens `/dashboard/owner?view=branches` inside the AppShell content area instead of the standalone branch picker.
     - Added Branch Management header with Kingsway red `Add New Branch` sheet/drawer.
-    - The drawer uses the existing `standard` + `profile_photo` branch create action and 10 MB JPG/PNG/WebP validation path.
+    - The drawer uses the existing `standard` + `profile_photo` branch create action and JPG/PNG/WebP validation path.
     - Added mini stats for Total Branches, Total Classrooms, and Capacity Status.
     - Added a management data table with Branch Name/ID, Address, Rooms, Staff, Status, and Actions columns.
     - Branch management table now uses a light/dark glassmorphism surface with translucent background, subtle border, blur, and deeper shadow.
@@ -908,10 +910,110 @@ Only use Docker again after explicit instruction.
   - Updated `check-kingsway.cmd -Mode standard` and `-Mode full` to run as a ladder: quick phase first, then standard-only additions, then full-only additions.
   - Repeated exact checks are skipped when already completed in an earlier phase, such as backend build or frontend lint.
   - New working rule: for tiny changes, do not run even quick checks automatically; run checks only when the change is risky, larger, explicitly requested, or before handoff.
+- 2026-05-08 Frontend stale dev cache recovery:
+  - Fixed the local startup path for the browser error `Cannot find module 'next-intl'`.
+  - Root cause: `next-intl` existed in `frontend/node_modules`, but the running Next dev server had a stale/broken `.next` Turbopack cache or old process.
+  - `tools/start-local-dev.ps1` now checks `http://127.0.0.1:3000/en/login` even when port 3000 is already open; if the current frontend is unhealthy, it stops the owned Next process, clears `frontend/.next`, and restarts frontend.
+  - Verification: local frontend `/en/login` returned 200 and rerunning `tools/start-local-dev.ps1` exited successfully without Docker.
+- 2026-05-08 Smoke test cleanup hardening:
+  - Updated `frontend/e2e/owner-smoke.spec.ts` so Owner smoke tests clean old and current `E2E Branch`, `E2E Replay`, and `E2E Concurrent` branch artifacts through the backend API.
+  - Cleanup now runs before the smoke test starts and again in `finally`, so failed/interrupted test runs are much less likely to leave test-created branches, students, teachers, rooms, files, or receptionists behind.
+  - This relies on backend branch delete cascading branch-owned data.
+  - Verification: targeted ESLint for `frontend/e2e/owner-smoke.spec.ts` passed. Full E2E was not run.
+- 2026-05-08 Add Student wizard redesign:
+  - Rebuilt Add Student as a dark glass, three-step wizard inspired by the provided screenshot: Personal Info, Academic Info, and Account Access.
+  - Kept the existing student profile photo upload path and form submission/backend contract; this is still the existing `standard` + `profile_photo` UI-avatar upload.
+  - Step navigation now uses Cancel, Back, and Next/Save controls while preserving entered values in the same form.
+  - Added EN JSON labels for the new wizard section/step text.
+  - Verification: targeted ESLint for `frontend/src/components/owner/add-student-form.tsx` passed, and a browser render smoke opened `/en/dashboard/owner?view=student-add` successfully with no console/page runtime errors. Full regression/E2E was not run.
+- 2026-05-10 Backend scalability preparation:
+  - Split `backend/internal/httpapi/server.go` into domain handler files for branch, student, teacher, academic, finance, files, and notifications.
+  - Split the large Postgres repository file into domain-specific store files while keeping shared scan helpers in `postgres.go`.
+  - Added a shared Postgres transaction helper and started using it in high-risk multi-step writes such as branch delete and student-with-details creation.
+  - Added audit log infrastructure: `audit_logs` migration, `domain.AuditLog`, Postgres `CreateAuditLog`, and generic HTTP write audit logging for successful authenticated POST/PATCH/PUT/DELETE requests.
+  - Extended idempotency to support no-body writes and added optional idempotency coverage to critical PATCH/DELETE paths such as branch, staff, teacher, student, room, and file writes. If the frontend sends `Idempotency-Key`, retry behavior is protected; if it does not, old behavior remains compatible.
+  - Added `-Module` support to `check-kingsway.cmd`, so checks can be scoped to `branch`, `teacher`, `student`, `receptionist`, `academic`, `finance`, `files`, `backend`, or `frontend`.
+  - Verification: backend API build passed and `tools/check-kingsway.ps1` parsed successfully. Direct Go test execution for `internal/httpapi` was blocked by Windows Application Control policy, not by a compile error.
+- 2026-05-11 Phase 1 security validation:
+  - Installed local validation tools with Scoop: `gcc` 15.2.0 and `golangci-lint` 2.12.2.
+  - Revalidated the security-lock changes for JWT secret hardening, DB-backed token validation, CORS allowlist, trusted-proxy client IP resolution, rate limiting, and audit/log redaction.
+  - Fixed lint-only cleanup in backend close handling and removed an unused audit helper so the validation gate is clean.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, and backend `golangci-lint run`.
+- 2026-05-11 Phase 1 security lock completion:
+  - Added JWT token-version revocation: tokens now carry a DB-backed token version, logout increments it, and old tokens are rejected. This intentionally invalidates older tokens that do not contain the new version claim.
+  - Added panic recovery middleware that returns a generic 500 response and logs sanitized request context plus stack metadata.
+  - Added Redis-backed distributed rate limiting for Postgres/Redis deployments with local in-memory fallback if Redis rate-limit calls fail at runtime.
+  - Hardened worker shutdown by returning worker completion channels and waiting for retention, outbox, notification, and RabbitMQ workers to stop before final HTTP shutdown.
+  - Added focused tests for token revocation and panic recovery.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, `golangci-lint run`, and `git diff --check`.
+- 2026-05-11 Phase 2.1 transaction model fix:
+  - Strengthened the Postgres store transaction helper with active-transaction context support.
+  - Routed store-level pool access through `queryRow`, `query`, and `exec` helpers so repository calls inside an active transaction use the same `pgx.Tx` instead of silently escaping atomicity.
+  - Converted the known student course registration validation path to use the active transaction instead of calling pool-backed helpers during the transaction.
+  - Verification passed with Docker disabled at that point: backend `go test ./...`, backend `go test -race ./...` with workspace `GOTMPDIR`, `golangci-lint run`, and `git diff --check`.
+- 2026-05-11 Phase 2.2 idempotency atomicity fix:
+  - Reworked idempotent JSON writes so the idempotency record and the business write run inside one Postgres transaction.
+  - Added `RunIdempotent`, which inserts the pending key, executes the business callback with the same transaction context, stores the completed response, and commits as one unit.
+  - Updated the store transaction helper so nested service/repository calls join the active transaction context instead of escaping to the pool.
+  - Updated idempotent HTTP handlers to pass the transaction context into service calls.
+  - Added integration coverage for rollback safety and replay safety.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, and backend `golangci-lint run`.
+- 2026-05-11 GCC PATH bootstrap for race checks:
+  - GCC was already installed by Scoop at `D:\Dev\Scoop\apps\gcc\current\bin`, but the current Codex/PowerShell process had a stale PATH.
+  - Added a small path bootstrap to `tools/check-kingsway.ps1` so future checks automatically see Scoop GCC and shims when they exist.
+  - Verification passed with Docker disabled: `gcc --version` and backend `go test -race ./...`.
+- 2026-05-11 Phase 2 final consistency cleanup:
+  - Removed the old public idempotency API path from the HTTP contract: `BeginIdempotency`, `CompleteIdempotency`, `ClearIdempotency`, and `IdempotencyBeginResult` are no longer exposed/used inside backend production code.
+  - Kept a single safe write path through `RunIdempotent`, so future idempotent writes cannot accidentally split the business write and idempotency completion across separate transactions.
+  - Updated memory and Postgres stores to keep old helper logic private/internal only where needed.
+  - Fixed Postgres idempotency replay comparison by trimming the fixed-width `char(64)` request hash scanned from DB.
+  - Updated idempotency integration tests to validate only the atomic `RunIdempotent` flow, including rollback retry and committed response replay.
+  - Verification passed with Docker disabled: backend `go test ./...` using workspace `GOTMPDIR`, backend `go test -race ./...` with `CGO_ENABLED=1`, backend `golangci-lint run`, `git diff --check`, and `KINGSWAY_INTEGRATION=1 go test ./internal/integration` after local PostgreSQL was started.
+  - Phase 2 score: 8.5/10 for the current project stage. Remaining gap to 10 is not basic transaction/idempotency anymore; it is cross-system exactly-once behavior for external side effects such as MinIO/file writes and future payment/exam flows, which needs outbox/compensation and endpoint-by-endpoint production policy enforcement before live launch.
+- 2026-05-11 Phase 3.1 pagination hardening:
+  - Removed HTTP `writePagedJSON` memory slicing from list endpoints and replaced it with `parsePage` + paginated service/store calls.
+  - Added DB-backed `LIMIT/OFFSET` plus total count paths for branch, staff, student, teacher, teacher finance, course, class, class-student, assignment, room, schedule, exam, exam-result, payment, salary-model, file, and notification lists.
+  - Kept the existing API response shape for list endpoints: responses remain arrays with the existing `X-Total-Count`, `X-Limit`, and `X-Offset` headers.
+  - Added memory-store paginated equivalents for unit tests/dev store compatibility.
+  - Verification passed with Docker disabled: targeted backend package tests and full backend `go test ./...`.
+- 2026-05-11 Phase 3.2 hot path optimization:
+  - Reduced multipart upload memory pressure by parsing upload forms with a 1 MB in-memory threshold and cleaning multipart temp files after each request.
+  - Added a service-level upload read guard so direct file service calls cannot bypass the HTTP upload limit.
+  - Removed WebP MIME sniffing string conversions and pre-sized upload filename sanitization builders to avoid small repeated allocations.
+  - Verification passed with Docker disabled: `go test ./internal/files ./internal/httpapi` and `git diff --check` for the touched backend files.
+- 2026-05-11 Phase 3.3 performance validation:
+  - Read-only validation found the main list endpoints are now DB-paginated and upload memory is guarded.
+  - Remaining performance gaps are role-scoped fallback pagination in a few service paths, audit JSON marshal/unmarshal overhead on write requests, double buffering around upload-to-service handoff, and missing image dimension guard before profile photo decode.
+  - Phase 3 optimization score: 7.5/10.
+- 2026-05-11 Upload limit adjustment:
+  - Raised profile/file upload size from 10 MB to 15 MB across backend HTTP limit, file service guard, frontend photo validation, API contract, OpenAPI text, and user-facing EN messages.
+  - Raised Next.js Server Action body limit to 18 MB so 15 MB multipart uploads have enough request overhead room.
+- 2026-05-11 Phase 4.1 academic domain separation:
+  - Split the fat `academic.Store` interface into smaller domain store contracts: branch, staff, student, teacher, course, class, assignment, room, schedule, exam, and dashboard.
+  - Kept the public `NewService(store Store, authService AuthService)` constructor compatible while the service now holds domain-specific store fields internally.
+  - No business logic or HTTP/API contract changed.
+  - Verification passed with Docker disabled: `go test ./internal/academic`, `go test ./internal/httpapi ./cmd/api-server`, and `git diff --check` for the touched academic file.
+- 2026-05-11 Phase 4.2 package structure cleanup:
+  - Split the former 2300+ line `backend/internal/academic/service.go` god file into domain-oriented files: contracts, inputs, pagination, branch/staff, student, teacher, course/class/assignment, room, schedule, exam/dashboard, filters, and validation.
+  - Kept package name, exported service methods, constructor signature, and business behavior unchanged.
+  - `service.go` now only documents the package role; actual code is grouped by domain responsibility.
+  - Verification passed with Docker disabled: backend `go test ./...` and `git diff --check` for the touched academic/README files.
+- 2026-05-11 Phase 4.3 architecture validation:
+  - Coupling and maintainability were reviewed after Phase 4.1/4.2.
+  - Academic service boundaries are much cleaner: domain store interfaces are split and service code is grouped by branch/staff, student, teacher, room, schedule, exam/dashboard, filters, and validation.
+  - Remaining architecture gaps: `store/memory.go` is still large, some Postgres store files remain broad, HTTP middleware/server files still carry multiple concerns, and domain boundaries are improved by convention rather than fully enforced by package-level isolation.
+  - Phase 4 score: 7.5/10. This is enough for the current pre-meeting stage; reaching 10/10 would require stricter package isolation, smaller test/memory stores, service-level audit events, endpoint-specific contract enforcement, and broader module tests.
+- 2026-05-11 Phase 5.1 low-risk cleanup:
+  - Removed duplicated service pagination helpers by moving the shared fallback pagination behavior to `domain.PageSlice` and `domain.SinglePage`.
+  - Updated academic and finance fallback pagination call sites to use the shared domain helpers.
+  - Replaced the now-empty academic `service.go` package comment file with `doc.go`.
+  - No business logic or API contract changed.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `golangci-lint run`, and `git diff --check`.
 
 ## Next Steps
 
 1. If strict WebP storage is required for profile photos, replace the current JPEG profile-photo encoder with a backend WebP encoder and update the existing file optimizer tests.
-2. Implement Student & Assignment Hub action buttons: Edit and Quick Assign/Swap behavior.
-3. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
-4. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.
+2. Continue backend hardening by gradually converting the remaining manual transaction blocks to the shared helper and adding service-level audit events for sensitive actions such as salary changes and destructive deletes.
+3. Implement Student & Assignment Hub action buttons: Edit and Quick Assign/Swap behavior.
+4. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
+5. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.

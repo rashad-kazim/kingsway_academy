@@ -146,7 +146,7 @@ type StaffFormValues = {
 };
 
 const initialActionState: StaffManagementState = {};
-const MAX_STAFF_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_STAFF_PHOTO_BYTES = 15 * 1024 * 1024;
 const sharedMotionTransition = {
   type: "spring",
   stiffness: 210,

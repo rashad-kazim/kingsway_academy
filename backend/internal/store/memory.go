@@ -103,9 +103,9 @@ func idempotencyMapKey(actorUserID, method, path, key string) string {
 	return actorUserID + "\x00" + method + "\x00" + path + "\x00" + key
 }
 
-func (m *Memory) BeginIdempotency(_ context.Context, record domain.IdempotencyRecord) (domain.IdempotencyBeginResult, error) {
+func (m *Memory) beginIdempotency(record domain.IdempotencyRecord) (bool, domain.IdempotencyRecord, error) {
 	if record.ActorUserID == "" || record.Method == "" || record.Path == "" || record.Key == "" || record.RequestHash == "" {
-		return domain.IdempotencyBeginResult{}, domain.ErrInvalidInput
+		return false, domain.IdempotencyRecord{}, domain.ErrInvalidInput
 	}
 
 	m.mu.Lock()
@@ -117,9 +117,9 @@ func (m *Memory) BeginIdempotency(_ context.Context, record domain.IdempotencyRe
 			delete(m.idempotency, key)
 		} else {
 			if existing.RequestHash != record.RequestHash {
-				return domain.IdempotencyBeginResult{}, domain.ErrConflict
+				return false, domain.IdempotencyRecord{}, domain.ErrConflict
 			}
-			return domain.IdempotencyBeginResult{Record: existing}, nil
+			return false, existing, nil
 		}
 	}
 
@@ -132,10 +132,10 @@ func (m *Memory) BeginIdempotency(_ context.Context, record domain.IdempotencyRe
 	}
 	m.idempotency[key] = record
 
-	return domain.IdempotencyBeginResult{Started: true, Record: record}, nil
+	return true, record, nil
 }
 
-func (m *Memory) CompleteIdempotency(_ context.Context, actorUserID string, method string, path string, key string, responseStatus int, responseBody []byte) error {
+func (m *Memory) completeIdempotency(actorUserID string, method string, path string, key string, responseStatus int, responseBody []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -153,12 +153,47 @@ func (m *Memory) CompleteIdempotency(_ context.Context, actorUserID string, meth
 	return nil
 }
 
-func (m *Memory) ClearIdempotency(_ context.Context, actorUserID string, method string, path string, key string) error {
+func (m *Memory) RunIdempotent(ctx context.Context, record domain.IdempotencyRecord, execute func(context.Context) (int, []byte, error)) (domain.IdempotencyRunResult, error) {
+	if execute == nil {
+		return domain.IdempotencyRunResult{}, domain.ErrInvalidInput
+	}
+
+	started, current, err := m.beginIdempotency(record)
+	if err != nil {
+		return domain.IdempotencyRunResult{}, err
+	}
+	if !started {
+		if current.Status == domain.IdempotencyStatusCompleted {
+			return domain.IdempotencyRunResult{
+				Replayed:       true,
+				ResponseStatus: current.ResponseStatus,
+				ResponseBody:   append([]byte(nil), current.ResponseBody...),
+			}, nil
+		}
+
+		return domain.IdempotencyRunResult{}, domain.ErrConflict
+	}
+
+	status, payload, err := execute(ctx)
+	if err != nil {
+		m.clearIdempotency(record.ActorUserID, record.Method, record.Path, record.Key)
+		return domain.IdempotencyRunResult{}, err
+	}
+	if err := m.completeIdempotency(record.ActorUserID, record.Method, record.Path, record.Key, status, payload); err != nil {
+		return domain.IdempotencyRunResult{}, err
+	}
+
+	return domain.IdempotencyRunResult{
+		ResponseStatus: status,
+		ResponseBody:   append([]byte(nil), payload...),
+	}, nil
+}
+
+func (m *Memory) clearIdempotency(actorUserID string, method string, path string, key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.idempotency, idempotencyMapKey(actorUserID, method, path, key))
-	return nil
 }
 
 func (m *Memory) CountOwners(_ context.Context) (int, error) {
@@ -384,10 +419,26 @@ func (m *Memory) CreateUser(_ context.Context, user domain.User) (domain.User, e
 	ts := now()
 	user.ID = newID()
 	user.IsActive = true
+	user.TokenVersion = 1
 	user.CreatedAt = ts
 	user.UpdatedAt = ts
 	m.users[user.ID] = user
 	m.usersByEmail[user.Email] = user.ID
+
+	return user, nil
+}
+
+func (m *Memory) RevokeUserTokens(_ context.Context, id string) (domain.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	user, ok := m.users[id]
+	if !ok {
+		return domain.User{}, domain.ErrNotFound
+	}
+	user.TokenVersion++
+	user.UpdatedAt = now()
+	m.users[id] = user
 
 	return user, nil
 }
@@ -451,6 +502,7 @@ func (m *Memory) CreateStaffMember(_ context.Context, user domain.User, staff do
 	user.CreatedAt = ts
 	user.UpdatedAt = ts
 	user.IsActive = true
+	user.TokenVersion = 1
 	m.users[user.ID] = user
 	m.usersByEmail[user.Email] = user.ID
 
@@ -491,6 +543,7 @@ func (m *Memory) UpdateStaffMember(_ context.Context, staff domain.StaffMember, 
 	}
 
 	delete(m.usersByEmail, user.Email)
+	shouldRevoke := user.BranchID != staff.BranchID || user.IsActive != staff.IsActive || strings.TrimSpace(passwordHash) != ""
 	user.BranchID = staff.BranchID
 	user.Email = email
 	user.FirstName = strings.TrimSpace(staff.FirstName)
@@ -499,6 +552,9 @@ func (m *Memory) UpdateStaffMember(_ context.Context, staff domain.StaffMember, 
 		user.PasswordHash = strings.TrimSpace(passwordHash)
 	}
 	user.IsActive = staff.IsActive
+	if shouldRevoke {
+		user.TokenVersion++
+	}
 	user.UpdatedAt = now()
 	m.users[user.ID] = user
 	m.usersByEmail[user.Email] = user.ID
@@ -1064,12 +1120,16 @@ func (m *Memory) UpdateTeacherAccount(_ context.Context, teacher domain.Teacher,
 	}
 
 	delete(m.usersByEmail, currentUser.Email)
+	shouldRevoke := currentUser.BranchID != teacher.BranchID || strings.TrimSpace(passwordHash) != ""
 	currentUser.BranchID = teacher.BranchID
 	currentUser.Email = email
 	currentUser.FirstName = strings.TrimSpace(user.FirstName)
 	currentUser.LastName = strings.TrimSpace(user.LastName)
 	if strings.TrimSpace(passwordHash) != "" {
 		currentUser.PasswordHash = strings.TrimSpace(passwordHash)
+	}
+	if shouldRevoke {
+		currentUser.TokenVersion++
 	}
 	currentUser.UpdatedAt = now()
 	m.users[currentUser.ID] = currentUser
@@ -1651,7 +1711,10 @@ func (m *Memory) RegisterFile(_ context.Context, file domain.FileObject) (domain
 	if _, ok := m.branches[file.BranchID]; !ok {
 		return domain.FileObject{}, domain.ErrNotFound
 	}
-	if !file.Category.IsValid() || file.OriginalFilename == "" || file.StorageBucket == "" || file.StorageKey == "" {
+	if file.Policy == "" && file.Category.IsValid() {
+		file.Policy = domain.InferFilePolicy(file.Category, file.Purpose)
+	}
+	if !file.Category.IsValid() || !file.Policy.IsValid() || file.Policy.Category() != file.Category || file.OriginalFilename == "" || file.StorageBucket == "" || file.StorageKey == "" {
 		return domain.FileObject{}, domain.ErrInvalidInput
 	}
 	if file.Category.MustPreserveOriginalBytes() && file.StoredSizeBytes != file.OriginalSizeBytes {

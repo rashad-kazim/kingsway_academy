@@ -25,7 +25,7 @@ func insertOutboxTx(ctx context.Context, tx pgx.Tx, topic string, payload any) e
 
 func (p *Postgres) ListOutboxEvents(ctx context.Context, status domain.OutboxEventStatus, limit int, offset int) ([]domain.OutboxEvent, int, error) {
 	var total int
-	if err := p.pool.QueryRow(ctx, `
+	if err := p.queryRow(ctx, `
 		SELECT count(*)
 		FROM outbox_events
 		WHERE ($1::text = '' OR status = $1::text)
@@ -33,7 +33,7 @@ func (p *Postgres) ListOutboxEvents(ctx context.Context, status domain.OutboxEve
 		return nil, 0, mapPostgresError(err)
 	}
 
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, topic, payload::text, status, attempts, next_attempt_at,
 			locked_at, coalesce(last_error, ''), published_at, created_at
 		FROM outbox_events
@@ -62,7 +62,7 @@ func (p *Postgres) ListOutboxEvents(ctx context.Context, status domain.OutboxEve
 }
 
 func (p *Postgres) RetryOutboxEvent(ctx context.Context, id string) (domain.OutboxEvent, error) {
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		UPDATE outbox_events
 		SET status = 'pending',
 			attempts = 0,

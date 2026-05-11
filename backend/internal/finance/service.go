@@ -18,11 +18,14 @@ type Store interface {
 	UpdateTeacher(ctx context.Context, teacher domain.Teacher) (domain.Teacher, error)
 	DeleteTeacher(ctx context.Context, id string) (domain.Teacher, error)
 	ListTeacherFinanceRecords(ctx context.Context, branchID string) ([]domain.TeacherFinanceRecord, error)
+	ListTeacherFinanceRecordsPage(ctx context.Context, branchID string, subject string, status domain.TeacherStatus, salaryModel domain.SalaryModelType, page domain.PageRequest) ([]domain.TeacherFinanceRecord, int, error)
 	CreatePayment(ctx context.Context, payment domain.Payment) (domain.Payment, error)
 	GetPayment(ctx context.Context, id string) (domain.Payment, error)
 	ListPayments(ctx context.Context, branchID string) ([]domain.Payment, error)
+	ListPaymentsPage(ctx context.Context, branchID string, status domain.PaymentStatus, page domain.PageRequest) ([]domain.Payment, int, error)
 	CreateSalaryModel(ctx context.Context, model domain.SalaryModel) (domain.SalaryModel, error)
 	ListSalaryModels(ctx context.Context, branchID string) ([]domain.SalaryModel, error)
+	ListSalaryModelsPage(ctx context.Context, branchID string, teacherID string, page domain.PageRequest) ([]domain.SalaryModel, int, error)
 }
 
 type JSONCache interface {
@@ -176,6 +179,40 @@ func (s *Service) ListPayments(ctx context.Context, actor domain.Principal, bran
 	return filtered, nil
 }
 
+func (s *Service) ListPaymentsPage(ctx context.Context, actor domain.Principal, branchID string, status domain.PaymentStatus, page domain.PageRequest) ([]domain.Payment, int, error) {
+	if actor.Role == domain.RoleTeacher {
+		return nil, 0, domain.ErrForbidden
+	}
+	if actor.Role == domain.RoleStudent {
+		payments, err := s.ListPayments(ctx, actor, branchID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if status != "" {
+			filtered := make([]domain.Payment, 0, len(payments))
+			for _, payment := range payments {
+				if payment.Status == status {
+					filtered = append(filtered, payment)
+				}
+			}
+			payments = filtered
+		}
+		items, total := domain.PageSlice(payments, page)
+		return items, total, nil
+	}
+	if !actor.IsOwner() {
+		branchID = actor.BranchID
+	}
+	branchID = strings.TrimSpace(branchID)
+	if actor.IsOwner() && branchID == "" {
+		return s.store.ListPaymentsPage(ctx, "", status, page)
+	}
+	if err := auth.RequireBranch(actor, branchID); err != nil {
+		return nil, 0, err
+	}
+	return s.store.ListPaymentsPage(ctx, branchID, status, page)
+}
+
 func (s *Service) GetPayment(ctx context.Context, actor domain.Principal, id string) (domain.Payment, error) {
 	payment, err := s.store.GetPayment(ctx, id)
 	if err != nil {
@@ -278,6 +315,31 @@ func (s *Service) ListSalaryModels(ctx context.Context, actor domain.Principal, 
 	return s.store.ListSalaryModels(ctx, branchID)
 }
 
+func (s *Service) ListSalaryModelsPage(ctx context.Context, actor domain.Principal, branchID string, page domain.PageRequest) ([]domain.SalaryModel, int, error) {
+	if actor.Role == domain.RoleReceptionist || actor.Role == domain.RoleStudent {
+		return nil, 0, domain.ErrForbidden
+	}
+	teacherID := ""
+	if actor.Role == domain.RoleTeacher {
+		teacher, err := s.store.GetTeacherByUser(ctx, actor.UserID)
+		if err != nil {
+			return nil, 0, err
+		}
+		branchID = teacher.BranchID
+		teacherID = teacher.ID
+	}
+	if actor.IsOwner() {
+		branchID = strings.TrimSpace(branchID)
+	}
+	if actor.IsOwner() && branchID == "" {
+		return s.store.ListSalaryModelsPage(ctx, "", teacherID, page)
+	}
+	if err := auth.RequireBranch(actor, branchID); err != nil {
+		return nil, 0, err
+	}
+	return s.store.ListSalaryModelsPage(ctx, branchID, teacherID, page)
+}
+
 func (s *Service) ListTeacherFinanceRecords(ctx context.Context, actor domain.Principal, filter TeacherFinanceFilter) ([]domain.TeacherFinanceRecord, error) {
 	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
 		return nil, err
@@ -310,6 +372,19 @@ func (s *Service) ListTeacherFinanceRecords(ctx context.Context, actor domain.Pr
 	}
 
 	return filtered, nil
+}
+
+func (s *Service) ListTeacherFinanceRecordsPage(ctx context.Context, actor domain.Principal, filter TeacherFinanceFilter, page domain.PageRequest) ([]domain.TeacherFinanceRecord, int, error) {
+	if err := auth.RequireAnyRole(actor, domain.RoleOwner); err != nil {
+		return nil, 0, err
+	}
+	branchID := strings.TrimSpace(filter.BranchID)
+	if branchID != "" {
+		if err := auth.RequireBranch(actor, branchID); err != nil {
+			return nil, 0, err
+		}
+	}
+	return s.store.ListTeacherFinanceRecordsPage(ctx, branchID, normalizeFilter(filter.Subject), filter.Status, filter.SalaryModel, page)
 }
 
 func (s *Service) DeleteTeacher(ctx context.Context, actor domain.Principal, teacherID string) (domain.Teacher, error) {

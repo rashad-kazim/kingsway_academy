@@ -700,7 +700,7 @@ paths:
   /v1/files/upload:
     post:
       tags: [files]
-      description: Uploads a file up to 10 MB. Use `standard` for normal files and `special` for very important files. Lossy optimization is not reversible. Special PDFs may have non-content metadata removed, but content must not be altered; Special JPG/PNG/WebP images should not be recompressed or quality-ratio converted. `standard` + `profile_photo` image uploads are optimized display assets at 768x768 JPEG quality 85 with metadata stripped.
+      description: Uploads a file up to 15 MB. File policy is normalized as `standard-ui`, `standard-downloadable`, or `special`. If `policy` is omitted, the backend infers it from category and purpose. Lossy optimization is not reversible. `standard-ui` profile photos are optimized display assets at 768x768 JPEG quality 85 with metadata stripped.
       requestBody:
         required: true
         content:
@@ -717,6 +717,8 @@ paths:
                   type: string
                 category:
                   enum: [standard, special]
+                policy:
+                  enum: [standard-ui, standard-downloadable, special]
                 purpose:
                   enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
                 file:
@@ -1425,6 +1427,8 @@ components:
                 type: string
               category:
                 enum: [standard, special]
+              policy:
+                enum: [standard-ui, standard-downloadable, special]
               purpose:
                 enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
               original_filename:
@@ -2060,6 +2064,8 @@ components:
           type: string
         category:
           enum: [standard, special]
+        policy:
+          enum: [standard-ui, standard-downloadable, special]
         purpose:
           enum: [material, payment_receipt, event, passport, diploma, profile_photo, exam_writing]
         original_filename:

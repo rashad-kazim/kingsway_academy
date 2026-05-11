@@ -173,6 +173,64 @@
   }
 }
 
+@layer components {
+  .student-wizard-input {
+    height: 2.75rem;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(148 163 184 / 0.38);
+    background: rgb(255 255 255 / 0.64);
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #0a284b;
+    outline: none;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .student-wizard-input::placeholder {
+    color: #7d8a9d;
+  }
+
+  .student-wizard-input:focus {
+    border-color: #ef2334;
+    box-shadow: 0 0 0 3px rgb(239 35 52 / 0.12);
+  }
+
+  .dark .student-wizard-input {
+    border-color: rgb(148 163 184 / 0.22);
+    background: rgb(15 30 46 / 0.58);
+    color: #f3f6fa;
+  }
+
+  .dark .student-wizard-input::placeholder {
+    color: #738197;
+  }
+
+  .dark .student-wizard-input:focus {
+    border-color: #ff5a69;
+    box-shadow: 0 0 0 3px rgb(255 90 105 / 0.14);
+  }
+
+  .dark .student-wizard .student-wizard-input {
+    border-color: rgb(148 163 184 / 0.22);
+    background: rgb(15 30 46 / 0.58);
+    color: #f3f6fa;
+  }
+
+  .dark .student-wizard .student-wizard-input::placeholder {
+    color: #738197;
+  }
+
+  .dark .student-wizard .student-wizard-input:focus {
+    border-color: #ff5a69;
+    box-shadow: 0 0 0 3px rgb(255 90 105 / 0.14);
+  }
+}
+
 .login-bubble-layer {
   position: absolute;
   inset: 0;

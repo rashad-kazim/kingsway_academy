@@ -95,7 +95,7 @@ export async function createStudentAction(
 
   const photo = formData.get("profile_photo");
   if (photo instanceof File && photo.size > 0) {
-    if (photo.size > 10 * 1024 * 1024) {
+    if (photo.size > 15 * 1024 * 1024) {
       return { error: "photo_too_large" };
     }
     if (

@@ -1,6 +1,8 @@
 param(
   [ValidateSet("quick", "standard", "full")]
   [string]$Mode = "quick",
+  [ValidateSet("auto", "backend", "frontend", "branch", "teacher", "student", "receptionist", "academic", "finance", "files")]
+  [string]$Module = "auto",
   [switch]$SkipE2E,
   [switch]$NoStart,
   [switch]$VerboseOutput
@@ -15,6 +17,25 @@ $RuntimeDir = Join-Path $Root ".runtime"
 $BackendExe = Join-Path $RuntimeDir "backend-api-server.exe"
 $LogFile = Join-Path $RuntimeDir "check-kingsway.log"
 $script:CurrentStepLog = $null
+
+function Add-PathIfExists {
+  param([string]$PathToAdd)
+  if (-not (Test-Path $PathToAdd)) {
+    return
+  }
+  $parts = @($env:PATH -split ';' | Where-Object { $_ })
+  foreach ($part in $parts) {
+    if ([string]::Equals($part.TrimEnd('\'), $PathToAdd.TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase)) {
+      return
+    }
+  }
+  $env:PATH = "$PathToAdd;$env:PATH"
+}
+
+function Initialize-ToolPath {
+  Add-PathIfExists "D:\Dev\Scoop\apps\gcc\current\bin"
+  Add-PathIfExists "D:\Dev\Scoop\shims"
+}
 
 function Get-RequiredCommand {
   param([string]$Name, [string]$InstallHint)
@@ -348,6 +369,28 @@ function Resolve-GoImportPaths {
   return @($paths | Sort-Object -Unique)
 }
 
+function Get-ModuleBackendPackages {
+  param([string]$ModuleName)
+
+  switch ($ModuleName) {
+    "backend" { return @("./...") }
+    "frontend" { return @() }
+    "branch" { return @("./internal/httpapi", "./internal/academic", "./internal/files", "./internal/store") }
+    "teacher" { return @("./internal/httpapi", "./internal/academic", "./internal/finance", "./internal/files", "./internal/store") }
+    "student" { return @("./internal/httpapi", "./internal/academic", "./internal/store") }
+    "receptionist" { return @("./internal/httpapi", "./internal/academic", "./internal/files", "./internal/store") }
+    "academic" { return @("./internal/httpapi", "./internal/academic", "./internal/store") }
+    "finance" { return @("./internal/httpapi", "./internal/finance", "./internal/store") }
+    "files" { return @("./internal/httpapi", "./internal/files", "./internal/store") }
+    default { return @() }
+  }
+}
+
+function Test-ModuleTouchesFrontend {
+  param([string]$ModuleName)
+  return $ModuleName -in @("frontend", "branch", "teacher", "student", "receptionist", "academic", "finance", "files")
+}
+
 function Get-GoTestPackages {
   param(
     [string]$GoPath,
@@ -415,6 +458,8 @@ function Get-BrowserChannel {
   throw "Chrome or Microsoft Edge was not found. Install one of them or run Playwright browser install manually."
 }
 
+Initialize-ToolPath
+
 New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
 Set-Content -Path $LogFile -Value "Kingsway check log`nStarted: $(Get-Date -Format o)`nRoot: $Root`n" -Encoding utf8
 
@@ -432,8 +477,10 @@ $gotmp = Join-Path $RuntimeDir "gotmp"
 New-Item -ItemType Directory -Path $gotmp -Force | Out-Null
 $env:GOTMPDIR = (Resolve-Path $gotmp).Path
 $changedFiles = @(Get-ChangedFiles $git.Source)
-$backendChanged = Test-ChangedUnder $changedFiles "backend"
-$frontendChanged = Test-ChangedUnder $changedFiles "frontend"
+$moduleMode = $Module -ne "auto"
+$backendChanged = if ($moduleMode) { $Module -ne "frontend" } else { Test-ChangedUnder $changedFiles "backend" }
+$frontendChanged = if ($moduleMode) { Test-ModuleTouchesFrontend $Module } else { Test-ChangedUnder $changedFiles "frontend" }
+$apiContractChanged = Test-ChangedUnder $changedFiles "backend/api"
 $toolingChanged = Test-ChangedUnder $changedFiles "tools"
 $rootCheckChanged = $false
 foreach ($file in $changedFiles) {
@@ -442,23 +489,48 @@ foreach ($file in $changedFiles) {
   }
 }
 
-Add-Content -Path $LogFile -Value "Mode: $Mode`nChanged files:`n$($changedFiles -join "`n")`n"
+Add-Content -Path $LogFile -Value "Mode: $Mode`nModule: $Module`nChanged files:`n$($changedFiles -join "`n")`n"
 
 $script:WhitespaceDone = $false
 $script:BackendBuildDone = $false
 $script:FrontendLintDone = $false
+$script:ApiContractDone = $false
 $script:QuickBackendPackages = @()
 $script:QuickBackendImportPaths = @()
 
+function Invoke-ApiContractGuard {
+  Invoke-CheckStep "API contract guard" {
+    $openapiPath = Join-Path $BackendDir "api\openapi.yaml"
+    $contractPath = Join-Path $BackendDir "api\frontend-contract.md"
+    $openapi = Get-Content -Raw -Path $openapiPath
+    $contract = Get-Content -Raw -Path $contractPath
+
+    foreach ($required in @("standard-ui", "standard-downloadable", "special", "/v1/student-assignment-hub", "Idempotency-Key")) {
+      if ($openapi -notmatch [regex]::Escape($required) -and $contract -notmatch [regex]::Escape($required)) {
+        throw "API contract is missing required marker: $required"
+      }
+    }
+  }
+  $script:ApiContractDone = $true
+}
+
 function Invoke-QuickPhase {
-  Write-Host "Kingsway check phase: quick (changed files only; no build/E2E unless needed)." -ForegroundColor Cyan
+  if ($moduleMode) {
+    Write-Host "Kingsway check phase: quick (module: $Module; no full app/E2E unless requested)." -ForegroundColor Cyan
+  } else {
+    Write-Host "Kingsway check phase: quick (changed files only; no build/E2E unless needed)." -ForegroundColor Cyan
+  }
   Invoke-CheckStep "Whitespace check" {
     Invoke-CheckedNative $git.Source @("-c", "core.autocrlf=false", "diff", "--check") $Root "git diff --check failed."
   }
   $script:WhitespaceDone = $true
 
   if ($backendChanged) {
-    $script:QuickBackendPackages = @(Get-ChangedBackendPackages $changedFiles)
+    if ($moduleMode) {
+      $script:QuickBackendPackages = @(Get-ModuleBackendPackages $Module)
+    } else {
+      $script:QuickBackendPackages = @(Get-ChangedBackendPackages $changedFiles)
+    }
     if ($script:QuickBackendPackages.Count -gt 0) {
       Invoke-CheckStep "Backend changed package tests" {
         $script:QuickBackendImportPaths = @(Resolve-GoImportPaths $go.Source $BackendDir $script:QuickBackendPackages)
@@ -472,8 +544,14 @@ function Invoke-QuickPhase {
       Invoke-CheckedNative $go.Source @("build", "-o", $BackendExe, ".\cmd\api-server") $BackendDir "Backend quick build failed."
     }
     $script:BackendBuildDone = $true
+
+    Invoke-ApiContractGuard
   } else {
     Write-Host "[SKIP] Backend unchanged." -ForegroundColor Yellow
+  }
+
+  if (-not $script:ApiContractDone -and $apiContractChanged) {
+    Invoke-ApiContractGuard
   }
 
   if ($frontendChanged) {
@@ -493,32 +571,36 @@ function Invoke-QuickPhase {
 function Invoke-StandardAdditions {
   Write-Host "Kingsway check phase: standard additions." -ForegroundColor Cyan
 
-  Invoke-CheckStep "Backend remaining unit tests" {
-    $previousIntegration = $env:KINGSWAY_INTEGRATION
-    $env:KINGSWAY_INTEGRATION = ""
-    try {
-      $skipPackages = New-Object 'System.Collections.Generic.HashSet[string]'
-      foreach ($package in $script:QuickBackendImportPaths) {
-        [void]$skipPackages.Add($package)
-      }
-
-      $allPackages = @(Get-GoTestPackages $go.Source $BackendDir)
-      $remainingPackages = @()
-      foreach ($package in $allPackages) {
-        if (-not $skipPackages.Contains($package)) {
-          $remainingPackages += $package
+  if ($moduleMode) {
+    Write-Host "[SKIP] Backend remaining unit tests skipped in module mode; selected module packages already ran in quick phase." -ForegroundColor Yellow
+  } else {
+    Invoke-CheckStep "Backend remaining unit tests" {
+      $previousIntegration = $env:KINGSWAY_INTEGRATION
+      $env:KINGSWAY_INTEGRATION = ""
+      try {
+        $skipPackages = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($package in $script:QuickBackendImportPaths) {
+          [void]$skipPackages.Add($package)
         }
-      }
 
-      if ($remainingPackages.Count -eq 0) {
-        "No remaining backend unit test packages after quick phase." | Out-File -FilePath $script:CurrentStepLog -Append -Encoding utf8
-      }
+        $allPackages = @(Get-GoTestPackages $go.Source $BackendDir)
+        $remainingPackages = @()
+        foreach ($package in $allPackages) {
+          if (-not $skipPackages.Contains($package)) {
+            $remainingPackages += $package
+          }
+        }
 
-      foreach ($package in $remainingPackages) {
-        Invoke-GoTests $go.Source $package $BackendDir "Backend remaining unit tests failed."
+        if ($remainingPackages.Count -eq 0) {
+          "No remaining backend unit test packages after quick phase." | Out-File -FilePath $script:CurrentStepLog -Append -Encoding utf8
+        }
+
+        foreach ($package in $remainingPackages) {
+          Invoke-GoTests $go.Source $package $BackendDir "Backend remaining unit tests failed."
+        }
+      } finally {
+        $env:KINGSWAY_INTEGRATION = $previousIntegration
       }
-    } finally {
-      $env:KINGSWAY_INTEGRATION = $previousIntegration
     }
   }
 
@@ -594,7 +676,7 @@ Invoke-QuickPhase
 if ($Mode -eq "quick") {
   Write-Host ""
   Write-Host "Kingsway quick check passed. Full log: $LogFile" -ForegroundColor Green
-  Write-Host "For deeper checks: .\check-kingsway.cmd -Mode standard or .\check-kingsway.cmd -Mode full" -ForegroundColor Yellow
+  Write-Host "For deeper checks: .\check-kingsway.cmd -Mode standard, .\check-kingsway.cmd -Mode full, or add -Module branch|teacher|student|receptionist" -ForegroundColor Yellow
   exit 0
 }
 

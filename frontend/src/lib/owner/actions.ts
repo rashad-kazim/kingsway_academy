@@ -77,7 +77,7 @@ export type StaffManagementState = {
     | "photo_too_large";
 };
 
-const MAX_BRANCH_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_BRANCH_PHOTO_BYTES = 15 * 1024 * 1024;
 const ALLOWED_BRANCH_PHOTO_TYPES = new Set([
   "image/jpeg",
   "image/jpg",

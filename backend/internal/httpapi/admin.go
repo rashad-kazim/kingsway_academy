@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -37,11 +38,8 @@ func (s *Server) outboxAction(w http.ResponseWriter, r *http.Request, principal 
 		return
 	}
 
-	event, err := s.admin.RetryOutboxEvent(r.Context(), principal, parts[0])
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, event)
+	s.writeIdempotentNoBodyJSON(w, r, principal, func(ctx context.Context) (int, any, error) {
+		event, err := s.admin.RetryOutboxEvent(ctx, principal, parts[0])
+		return http.StatusOK, event, err
+	})
 }

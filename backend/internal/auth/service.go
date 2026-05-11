@@ -16,6 +16,7 @@ type UserStore interface {
 	GetUser(ctx context.Context, id string) (domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.User, error)
 	RecordUserLogin(ctx context.Context, id string) (domain.User, error)
+	RevokeUserTokens(ctx context.Context, id string) (domain.User, error)
 }
 
 type Service struct {
@@ -55,7 +56,7 @@ type EmailAvailabilityResult struct {
 }
 
 func NewService(store UserStore, jwtSecret string) *Service {
-	return &Service{store: store, jwtSecret: jwtSecret}
+	return &Service{store: store, jwtSecret: strings.TrimSpace(jwtSecret)}
 }
 
 func (s *Service) BootstrapOwner(ctx context.Context, input BootstrapOwnerInput) (LoginResult, error) {
@@ -79,9 +80,10 @@ func (s *Service) BootstrapOwner(ctx context.Context, input BootstrapOwnerInput)
 	}
 
 	token, err := SignToken(s.jwtSecret, Claims{
-		UserID:   user.ID,
-		BranchID: user.BranchID,
-		Role:     user.Role,
+		UserID:       user.ID,
+		BranchID:     user.BranchID,
+		Role:         user.Role,
+		TokenVersion: user.TokenVersion,
 	})
 	if err != nil {
 		return LoginResult{}, err
@@ -137,9 +139,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (LoginResult, err
 	}
 
 	token, err := SignToken(s.jwtSecret, Claims{
-		UserID:   user.ID,
-		BranchID: user.BranchID,
-		Role:     user.Role,
+		UserID:       user.ID,
+		BranchID:     user.BranchID,
+		Role:         user.Role,
+		TokenVersion: user.TokenVersion,
 	})
 	if err != nil {
 		return LoginResult{}, err
@@ -159,6 +162,42 @@ func (s *Service) PrincipalFromToken(raw string) (domain.Principal, error) {
 		BranchID: claims.BranchID,
 		Role:     claims.Role,
 	}, nil
+}
+
+func (s *Service) AuthenticateToken(ctx context.Context, raw string) (domain.Principal, error) {
+	claims, err := ParseToken(s.jwtSecret, raw)
+	if err != nil {
+		return domain.Principal{}, err
+	}
+
+	user, err := s.store.GetUser(ctx, claims.UserID)
+	if err != nil {
+		return domain.Principal{}, domain.ErrUnauthorized
+	}
+	if !user.IsActive || user.Role != claims.Role || user.BranchID != claims.BranchID || user.TokenVersion != claims.TokenVersion {
+		return domain.Principal{}, domain.ErrUnauthorized
+	}
+	if user.Role.RequiresBranchScope() && user.BranchID == "" {
+		return domain.Principal{}, domain.ErrUnauthorized
+	}
+
+	return domain.Principal{
+		UserID:   user.ID,
+		BranchID: user.BranchID,
+		Role:     user.Role,
+	}, nil
+}
+
+func (s *Service) Logout(ctx context.Context, principal domain.Principal) error {
+	if principal.UserID == "" {
+		return domain.ErrUnauthorized
+	}
+	_, err := s.store.RevokeUserTokens(ctx, principal.UserID)
+	if err != nil {
+		return domain.ErrUnauthorized
+	}
+
+	return nil
 }
 
 func (s *Service) CurrentUser(ctx context.Context, principal domain.Principal) (domain.User, error) {

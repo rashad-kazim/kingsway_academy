@@ -21,6 +21,7 @@ $FrontendPid = Join-Path $RuntimeDir "frontend.pid"
 $BackendPid = Join-Path $RuntimeDir "backend.pid"
 $BackendWatchPid = Join-Path $RuntimeDir "backend-watch.pid"
 $BackendExe = Join-Path $RuntimeDir "backend-api-server.exe"
+$FrontendCache = Join-Path $FrontendDir ".next"
 $PostgresData = Join-Path $RuntimeDir "postgres-data"
 $RedisData = Join-Path $RuntimeDir "redis-data"
 $RabbitBase = Join-Path $RuntimeDir "rabbitmq"
@@ -110,6 +111,54 @@ function Stop-BackendIfOwned {
   Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
   if (-not (Wait-PortClosed 8080 15)) {
     throw "Backend process on 8080 did not stop cleanly."
+  }
+}
+
+function Stop-FrontendIfOwned {
+  param([string]$Reason)
+
+  $owner = Get-PortOwner 3000
+  if ($null -eq $owner) {
+    return
+  }
+
+  $pidFromFile = $null
+  if (Test-Path $FrontendPid) {
+    $rawPid = (Get-Content -LiteralPath $FrontendPid -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace($rawPid)) {
+      $pidFromFile = [int]$rawPid
+    }
+  }
+
+  $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$owner" -ErrorAction SilentlyContinue
+  $commandLine = if ($null -ne $processInfo) { $processInfo.CommandLine } else { "" }
+  $frontendNextPath = Join-Path $FrontendDir "node_modules\next"
+  $ownedByRuntime = ($null -ne $pidFromFile -and $owner -eq $pidFromFile) -or ($commandLine -like "*$frontendNextPath*")
+
+  if (-not $ownedByRuntime) {
+    throw "$Reason, but port 3000 is owned by another process ($owner). Stop that process manually, then run start-kingsway.cmd again."
+  }
+
+  Write-Host "Restarting frontend because $Reason..."
+  Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
+  if (-not (Wait-PortClosed 3000 15)) {
+    throw "Frontend process on 3000 did not stop cleanly."
+  }
+}
+
+function Test-FrontendReady {
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/en/login" -TimeoutSec 15
+    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 400
+  } catch {
+    return $false
+  }
+}
+
+function Clear-FrontendCache {
+  if (Test-Path $FrontendCache) {
+    Write-Host "Clearing stale Next.js dev cache..."
+    Remove-Item -LiteralPath $FrontendCache -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -494,7 +543,14 @@ if ($backendNeedsStart) {
 Ensure-DefaultOwner
 Start-BackendWatcher
 
-if (-not (Test-Port 3000)) {
+$frontendNeedsStart = -not (Test-Port 3000)
+if (-not $frontendNeedsStart -and -not (Test-FrontendReady)) {
+  Stop-FrontendIfOwned "the current frontend dev server is unhealthy"
+  Clear-FrontendCache
+  $frontendNeedsStart = $true
+}
+
+if ($frontendNeedsStart) {
   Remove-Item -LiteralPath $FrontendLog, $FrontendErr -Force -ErrorAction SilentlyContinue
   $frontend = Start-Process `
     -FilePath $npm.Source `
@@ -508,6 +564,14 @@ if (-not (Test-Port 3000)) {
 
   if (-not (Wait-Port 3000 45)) {
     Write-Host "Frontend did not start on 127.0.0.1:3000." -ForegroundColor Red
+    Write-Host "Frontend logs:"
+    Write-Host "  $FrontendLog"
+    Write-Host "  $FrontendErr"
+    exit 1
+  }
+
+  if (-not (Test-FrontendReady)) {
+    Write-Host "Frontend started on 127.0.0.1:3000, but /en/login is not healthy." -ForegroundColor Red
     Write-Host "Frontend logs:"
     Write-Host "  $FrontendLog"
     Write-Host "  $FrontendErr"

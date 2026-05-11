@@ -40,6 +40,10 @@ func (s *fakeFileStore) ListFiles(context.Context, string) ([]domain.FileObject,
 	return nil, nil
 }
 
+func (s *fakeFileStore) ListFilesPage(context.Context, string, string, string, domain.FilePurpose, domain.PageRequest) ([]domain.FileObject, int, error) {
+	return nil, 0, nil
+}
+
 func (s *fakeFileStore) ListExpiredFiles(_ context.Context, _ time.Time, limit int) ([]domain.FileObject, error) {
 	if limit > 0 && len(s.expired) > limit {
 		return s.expired[:limit], nil

@@ -16,6 +16,7 @@ import (
 type Store interface {
 	CreateNotification(ctx context.Context, notification domain.Notification) (domain.Notification, error)
 	ListNotifications(ctx context.Context, recipientUserID string, unreadOnly bool) ([]domain.Notification, error)
+	ListNotificationsPage(ctx context.Context, recipientUserID string, unreadOnly bool, page domain.PageRequest) ([]domain.Notification, int, error)
 	MarkNotificationRead(ctx context.Context, id string, recipientUserID string, readAt time.Time) (domain.Notification, error)
 	ListUsersByBranchAndRoles(ctx context.Context, branchID string, roles []domain.Role) ([]domain.User, error)
 	GetTeacher(ctx context.Context, id string) (domain.Teacher, error)
@@ -44,6 +45,14 @@ func (s *Service) ListNotifications(ctx context.Context, actor domain.Principal,
 	}
 
 	return s.store.ListNotifications(ctx, actor.UserID, unreadOnly)
+}
+
+func (s *Service) ListNotificationsPage(ctx context.Context, actor domain.Principal, unreadOnly bool, page domain.PageRequest) ([]domain.Notification, int, error) {
+	if actor.UserID == "" {
+		return nil, 0, domain.ErrUnauthorized
+	}
+
+	return s.store.ListNotificationsPage(ctx, actor.UserID, unreadOnly, page)
 }
 
 func (s *Service) MarkNotificationRead(ctx context.Context, actor domain.Principal, id string) (domain.Notification, error) {
@@ -108,9 +117,11 @@ func (s *Service) HandleEvent(ctx context.Context, topic string, body []byte) er
 	}
 }
 
-func (s *Service) StartPaymentReminderWorker(ctx context.Context, options WorkerOptions) {
+func (s *Service) StartPaymentReminderWorker(ctx context.Context, options WorkerOptions) <-chan struct{} {
+	done := make(chan struct{})
 	interval, horizon, limit, log := normalizeWorkerOptions(options, 6*time.Hour, 7*24*time.Hour, 100)
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -129,11 +140,15 @@ func (s *Service) StartPaymentReminderWorker(ctx context.Context, options Worker
 			}
 		}
 	}()
+
+	return done
 }
 
-func (s *Service) StartFileRetentionNoticeWorker(ctx context.Context, options WorkerOptions) {
+func (s *Service) StartFileRetentionNoticeWorker(ctx context.Context, options WorkerOptions) <-chan struct{} {
+	done := make(chan struct{})
 	interval, horizon, limit, log := normalizeWorkerOptions(options, 6*time.Hour, 7*24*time.Hour, 100)
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -152,6 +167,8 @@ func (s *Service) StartFileRetentionNoticeWorker(ctx context.Context, options Wo
 			}
 		}
 	}()
+
+	return done
 }
 
 func (s *Service) CreatePaymentReminders(ctx context.Context, horizon time.Duration, limit int) (int, error) {

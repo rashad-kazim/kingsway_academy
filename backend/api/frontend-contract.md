@@ -6,7 +6,7 @@ Authentication: send `Authorization: Bearer <token>` for every `/v1/*` endpoint 
 
 Every response includes `X-Request-ID`. The frontend may send its own `X-Request-ID` for correlation.
 
-Write/create-style JSON `POST` endpoints accept optional `Idempotency-Key`. The frontend should generate one key per submit attempt and reuse it for safe retry of the same payload. Repeating the same key and same body returns the original successful response; repeating the same key with a different body returns `409 conflict`.
+Write/create-style JSON `POST`, critical `PATCH`, critical `DELETE`, and multipart upload endpoints accept optional `Idempotency-Key`. The frontend should generate one key per submit attempt and reuse it for safe retry of the same payload. Repeating the same key and same body returns the original successful response; repeating the same key with a different body returns `409 conflict`.
 
 All list endpoints accept:
 
@@ -66,12 +66,15 @@ Errors use:
 
 ## File Upload Policy
 
-- Maximum upload size is 10 MB per file.
+- Maximum upload size is 15 MB per file.
 - Ask before adding any new file upload UI which category the file belongs to, and document upload-time optimization plus download-time behavior before implementation.
 - Lossy optimization cannot be reversed. If a file must later download in original visual/content quality, store the original or a content-preserving sanitized object; do not rely on reversing compression.
-- `standard` = "Sadece dosya": normal files. These may later use safe optimization/compression such as metadata removal, font subsetting, invisible layer cleanup, and conservative image/PDF downsampling when readability and OCR edge clarity remain intact. If original download quality is required, store original plus optional optimized preview.
-- `special` = "Cok onemli dosya": important official files. Visible/content data must not be altered. PDFs may have non-content metadata removed; JPG/PNG/WebP special images should not be recompressed or quality-ratio converted. At-rest encryption is required in the target architecture.
-- `standard` + `profile_photo` image uploads are optimized on the backend for UI use: auto-orientation, center square crop, 768x768 resize/upscale, metadata stripping, and JPEG quality 85 output. This is an optimized display asset and is not intended to recreate the original upload.
+- Backend stores both legacy `category` and normalized `policy`.
+- `standard-ui`: UI/avatar/profile images. Backend keeps only the optimized display asset. No original download promise.
+- `standard-downloadable`: normal downloadable file. Backend policy allows original-plus-preview behavior; download should return the original or a content-preserving sanitized object when original quality matters.
+- `special`: very important official files. Visible/content data must not be altered. PDFs may have non-content metadata removed; JPG/PNG/WebP special images should not be recompressed or quality-ratio converted. At-rest encryption is required in the target architecture.
+- If `policy` is omitted, backend infers it: `special` category -> `special`, `standard + profile_photo` -> `standard-ui`, otherwise `standard-downloadable`.
+- `standard-ui` + `profile_photo` image uploads are optimized on the backend for UI use: auto-orientation, center square crop, 768x768 resize/upscale, metadata stripping, and JPEG quality 85 output. This is an optimized display asset and is not intended to recreate the original upload.
 
 ## Operational Endpoints
 
