@@ -47,10 +47,10 @@ export default async function LoginPage({
   return (
     <main
       data-login-page
-      className="fixed inset-0 overflow-hidden bg-[#fdfdfd] text-[#0a284b]"
+      className="fixed inset-0 overflow-hidden bg-kw-c-fdfdfd text-kw-c-0a284b"
     >
-      <div className="absolute inset-0 z-0 bg-[#fdfdfd]" />
-      <div className="absolute inset-y-0 right-0 z-0 hidden w-[57%] bg-[linear-gradient(135deg,rgb(10,40,75),rgb(15,55,100))] lg:block" />
+      <div className="absolute inset-0 z-0 bg-kw-c-fdfdfd" />
+      <div className="absolute inset-y-0 right-0 z-0 hidden w-[57%] bg-kw-login-gradient lg:block" />
       <LoginBubbles />
       <div className="relative z-20 grid h-full w-full overflow-hidden lg:grid-cols-[43%_57%]">
         <section className="relative isolate flex h-full items-center justify-center px-6 sm:px-10 lg:px-12">
@@ -74,13 +74,13 @@ export default async function LoginPage({
 
         <section className="relative isolate hidden h-full overflow-hidden lg:block">
           <div className="relative z-20 flex h-full flex-col px-[9%] pt-[10vh]">
-            <h1 className="max-w-[520px] text-[clamp(34px,3.1vw,58px)] font-black leading-[0.98] text-white">
+            <h1 className="max-w-[520px] text-login-hero font-black leading-[0.98] text-white">
               {t("welcome")}
             </h1>
-            <p className="mt-2 max-w-[600px] text-[clamp(34px,3.2vw,60px)] font-black leading-none text-[#ef2334]">
+            <p className="mt-2 max-w-[600px] text-login-brand font-black leading-none text-kw-c-ef2334">
               {t("portal")}
             </p>
-            <p className="mt-5 text-[15px] font-semibold text-white">
+            <p className="mt-5 text-kw-15 font-semibold text-white">
               {t("heroCaption")}
             </p>
           </div>

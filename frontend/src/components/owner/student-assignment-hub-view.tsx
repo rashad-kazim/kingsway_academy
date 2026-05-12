@@ -175,13 +175,13 @@ export function StudentAssignmentHubView({
       <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">{labels.title}</h1>
-          <p className="mt-1 text-sm text-[#59667a] dark:text-[#a7b0bf]">
+          <p className="mt-1 text-sm text-kw-c-59667a dark:text-kw-c-a7b0bf">
             {labels.description}
           </p>
         </div>
         <Button
           asChild
-          className="h-[38px] gap-2 rounded-lg bg-[#ef2334] px-5 font-bold text-white shadow-[0_12px_26px_rgba(239,35,52,0.28)] transition hover:bg-[#d91f30] dark:bg-[#ff3b4f] dark:hover:bg-[#ff5a69]"
+          className="h-[38px] gap-2 rounded-lg bg-kw-c-ef2334 px-5 font-bold text-white shadow-kw-action transition hover:bg-kw-c-d91f30 dark:bg-kw-c-ff3b4f dark:hover:bg-kw-c-ff5a69"
         >
           <Link href={`/${locale}/dashboard/owner?view=student-add`}>
             <Plus className="size-4" />
@@ -190,7 +190,7 @@ export function StudentAssignmentHubView({
         </Button>
       </section>
 
-      <Card className="rounded-xl border-white/55 bg-white/65 shadow-[0_24px_70px_rgba(10,40,75,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1b2635]/62 dark:shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+      <Card className="rounded-xl border-white/55 bg-white/65 shadow-kw-panel backdrop-blur-xl dark:border-white/10 dark:bg-kw-c-1b2635/62 kw-dark-shadow-panel">
         <CardContent className="space-y-4 p-4">
           <div className="grid gap-3 md:grid-cols-[repeat(3,minmax(0,1fr))_minmax(260px,1.4fr)_auto] md:items-end">
             <FilterSelect
@@ -239,11 +239,11 @@ export function StudentAssignmentHubView({
               ))}
             </FilterSelect>
             <label className="space-y-2">
-              <span className="text-xs font-black uppercase tracking-[0.08em] text-[#687386] dark:text-[#a7b0bf]">
+              <span className="text-xs font-black uppercase tracking-[0.08em] text-kw-c-687386 dark:text-kw-c-a7b0bf">
                 {labels.search}
               </span>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#687386] dark:text-[#a7b0bf]" />
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-kw-c-687386 dark:text-kw-c-a7b0bf" />
                 <Input
                   className="h-11 pl-10"
                   value={searchValue}
@@ -265,7 +265,7 @@ export function StudentAssignmentHubView({
             <div className="flex flex-wrap items-center gap-2">
               {chips.map((chip) => (
                 <button
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#dce3ee] bg-white px-3 py-1.5 text-xs font-black text-[#0a284b] shadow-sm transition hover:border-[#ef2334] hover:text-[#ef2334] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:text-[#ff5a69]"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-kw-c-dce3ee bg-white px-3 py-1.5 text-xs font-black text-kw-c-0a284b shadow-sm transition hover:border-kw-c-ef2334 hover:text-kw-c-ef2334 dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa dark:hover:border-kw-c-ff3b4f dark:hover:text-kw-c-ff5a69"
                   key={chip.key}
                   title={labels.removeFilter}
                   type="button"
@@ -280,12 +280,12 @@ export function StudentAssignmentHubView({
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden rounded-xl border-white/55 bg-white/65 py-0 shadow-[0_24px_70px_rgba(10,40,75,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1b2635]/62 dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+      <Card className="overflow-hidden rounded-xl border-white/55 bg-white/65 py-0 shadow-kw-panel-strong backdrop-blur-xl dark:border-white/10 dark:bg-kw-c-1b2635/62 kw-dark-shadow-panel-strong">
         <CardContent className="p-0">
           <div className="max-h-[560px] overflow-auto">
             <Table>
               <TableHeader className="sticky top-0 z-10">
-                <TableRow className="h-14 border-white/40 bg-[#eef3f8] hover:bg-[#eef3f8] dark:border-white/10 dark:bg-[#202b3a] dark:hover:bg-[#202b3a]">
+                <TableRow className="h-14 border-white/40 bg-kw-c-eef3f8 hover:bg-kw-c-eef3f8 dark:border-white/10 dark:bg-kw-c-202b3a dark:hover:bg-kw-c-202b3a">
                   <TableHead className="px-5 py-4">{labels.profile}</TableHead>
                   <TableHead>{labels.fin}</TableHead>
                   <TableHead>{labels.activeTeacher}</TableHead>
@@ -301,7 +301,7 @@ export function StudentAssignmentHubView({
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={7}>
-                      <div className="flex items-center justify-center gap-3 px-4 py-16 text-[#687386] dark:text-[#a7b0bf]">
+                      <div className="flex items-center justify-center gap-3 px-4 py-16 text-kw-c-687386 dark:text-kw-c-a7b0bf">
                         <Loader2 className="size-5 animate-spin" />
                         <span className="font-bold">{labels.loading}</span>
                       </div>
@@ -310,19 +310,19 @@ export function StudentAssignmentHubView({
                 ) : pageData.items.length > 0 ? (
                   pageData.items.map((student) => (
                     <TableRow
-                      className="border-white/35 hover:bg-white/35 dark:border-white/10 dark:hover:bg-[#202b3a]/50"
+                      className="border-white/35 hover:bg-white/35 dark:border-white/10 dark:hover:bg-kw-c-202b3a/50"
                       key={student.id}
                     >
                       <TableCell className="px-5 py-5">
                         <div className="flex items-center gap-3">
-                          <Avatar className="size-11 border border-white/50 shadow-sm dark:border-[#414d60]">
+                          <Avatar className="size-11 border border-white/50 shadow-sm dark:border-kw-c-414d60">
                             {student.profile_photo_url ? (
                               <AvatarImage
                                 alt={studentFullName(student)}
                                 src={student.profile_photo_url}
                               />
                             ) : null}
-                            <AvatarFallback className="bg-[#e8edf5] text-sm font-black text-[#0a284b] dark:bg-[#2a3444] dark:text-[#f3f6fa]">
+                            <AvatarFallback className="bg-kw-c-e8edf5 text-sm font-black text-kw-c-0a284b dark:bg-kw-c-2a3444 dark:text-kw-c-f3f6fa">
                               {studentInitials(student)}
                             </AvatarFallback>
                           </Avatar>
@@ -330,7 +330,7 @@ export function StudentAssignmentHubView({
                             <div className="truncate font-bold">
                               {studentFullName(student)}
                             </div>
-                            <div className="mt-1 text-xs text-[#687386] dark:text-[#6f7a8a]">
+                            <div className="mt-1 text-xs text-kw-c-687386 dark:text-kw-c-6f7a8a">
                               {student.id.slice(0, 8)}
                             </div>
                           </div>
@@ -345,7 +345,7 @@ export function StudentAssignmentHubView({
                       <TableCell className="py-5 font-semibold">
                         {student.branch_name}
                       </TableCell>
-                      <TableCell className="py-5 text-[#59667a] dark:text-[#a7b0bf]">
+                      <TableCell className="py-5 text-kw-c-59667a dark:text-kw-c-a7b0bf">
                         {formatDate(student.registered_at)}
                       </TableCell>
                       <TableCell className="py-5">
@@ -378,7 +378,7 @@ export function StudentAssignmentHubView({
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7}>
-                      <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center text-[#687386] dark:text-[#6f7a8a]">
+                      <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center text-kw-c-687386 dark:text-kw-c-6f7a8a">
                         <Search className="size-8" />
                         <div className="font-bold">{labels.noStudents}</div>
                       </div>
@@ -388,14 +388,14 @@ export function StudentAssignmentHubView({
               </TableBody>
             </Table>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-4 border-t border-[#dce3ee] px-5 py-4 dark:border-[#334155]">
-            <div className="text-sm font-semibold text-[#687386] dark:text-[#a7b0bf]">
+          <div className="flex flex-wrap items-center justify-end gap-4 border-t border-kw-c-dce3ee px-5 py-4 dark:border-kw-c-334155">
+            <div className="text-sm font-semibold text-kw-c-687386 dark:text-kw-c-a7b0bf">
               {labels.showing} {pageData.items.length} {labels.of} {pageData.total}
             </div>
-            <label className="flex items-center gap-2 text-sm font-bold text-[#59667a] dark:text-[#a7b0bf]">
+            <label className="flex items-center gap-2 text-sm font-bold text-kw-c-59667a dark:text-kw-c-a7b0bf">
               {labels.rowsPerPage}
               <select
-                className="h-9 cursor-pointer rounded-lg border border-[#dce3ee] bg-white px-2 text-sm font-bold text-[#0a284b] outline-none dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa]"
+                className="h-9 cursor-pointer rounded-lg border border-kw-c-dce3ee bg-white px-2 text-sm font-bold text-kw-c-0a284b outline-none dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa"
                 value={activeFilters.limit ?? 20}
                 onChange={(event) =>
                   void updateFilters({
@@ -472,11 +472,11 @@ function FilterSelect({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-xs font-black uppercase tracking-[0.08em] text-[#687386] dark:text-[#a7b0bf]">
+      <span className="text-xs font-black uppercase tracking-[0.08em] text-kw-c-687386 dark:text-kw-c-a7b0bf">
         {label}
       </span>
       <select
-        className="h-11 w-full cursor-pointer rounded-lg border border-[#dce3ee] bg-white px-3 text-sm font-semibold text-[#0a284b] outline-none transition focus:border-[#ef2334] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:focus:border-[#ff3b4f]"
+        className="h-11 w-full cursor-pointer rounded-lg border border-kw-c-dce3ee bg-white px-3 text-sm font-semibold text-kw-c-0a284b outline-none transition focus:border-kw-c-ef2334 dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa dark:focus:border-kw-c-ff3b4f"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -498,7 +498,7 @@ function ActiveTeacherCell({
     .join(" ");
   if (!student.active_teacher_id || !name) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-[#ef2334]/35 bg-[#ef2334]/10 px-3 py-1 text-xs font-black text-[#ef2334] dark:border-[#ff3b4f]/35 dark:bg-[#ff3b4f]/10 dark:text-[#ff6b7a]">
+      <span className="inline-flex items-center gap-2 rounded-full border border-kw-c-ef2334/35 bg-kw-c-ef2334/10 px-3 py-1 text-xs font-black text-kw-c-ef2334 dark:border-kw-c-ff3b4f/35 dark:bg-kw-c-ff3b4f/10 dark:text-kw-c-ff6b7a">
         <UserX className="size-3.5" />
         {labels.notAssigned}
       </span>
@@ -520,7 +520,7 @@ function StudentStatusBadge({
       ? "bg-emerald-600 text-white hover:bg-emerald-600"
       : status === "graduated"
         ? "bg-sky-600 text-white hover:bg-sky-600"
-        : "bg-[#64748b] text-white hover:bg-[#64748b]";
+        : "bg-kw-c-64748b text-white hover:bg-kw-c-64748b";
 
   return <Badge className={className}>{labels.statuses[status]}</Badge>;
 }
@@ -539,9 +539,9 @@ function PaginationButton({
   return (
     <button
       className={cn(
-        "grid size-9 cursor-pointer place-items-center rounded-lg border border-[#dce3ee] text-sm font-semibold text-[#0a284b] transition hover:border-[#ef2334] hover:text-[#ef2334] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#3a4658] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:text-[#ff5a69]",
+        "grid size-9 cursor-pointer place-items-center rounded-lg border border-kw-c-dce3ee text-sm font-semibold text-kw-c-0a284b transition hover:border-kw-c-ef2334 hover:text-kw-c-ef2334 disabled:cursor-not-allowed disabled:opacity-40 dark:border-kw-c-3a4658 dark:text-kw-c-f3f6fa dark:hover:border-kw-c-ff3b4f dark:hover:text-kw-c-ff5a69",
         active &&
-          "border-[#ef2334] bg-[#ef2334] font-black text-white hover:text-white dark:border-[#ff3b4f] dark:bg-[#ff3b4f] dark:text-white",
+          "border-kw-c-ef2334 bg-kw-c-ef2334 font-black text-white hover:text-white dark:border-kw-c-ff3b4f dark:bg-kw-c-ff3b4f dark:text-white",
       )}
       disabled={disabled}
       type="button"

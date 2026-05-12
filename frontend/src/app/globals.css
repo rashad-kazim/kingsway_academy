@@ -39,6 +39,94 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-kw-c-052e16: #052e16;
+  --color-kw-c-05865d: #05865d;
+  --color-kw-c-079669: #079669;
+  --color-kw-c-0a284b: #0a284b;
+  --color-kw-c-0b1622: #0b1622;
+  --color-kw-c-0ca678: #0ca678;
+  --color-kw-c-0f3764: #0f3764;
+  --color-kw-c-121f2d: #121f2d;
+  --color-kw-c-152334: #152334;
+  --color-kw-c-15803d: #15803d;
+  --color-kw-c-166534: #166534;
+  --color-kw-c-17243a: #17243a;
+  --color-kw-c-1b2635: #1b2635;
+  --color-kw-c-1b2a3c: #1b2a3c;
+  --color-kw-c-202b3a: #202b3a;
+  --color-kw-c-202d3e: #202d3e;
+  --color-kw-c-203247: #203247;
+  --color-kw-c-22c55e: #22c55e;
+  --color-kw-c-263448: #263448;
+  --color-kw-c-293445: #293445;
+  --color-kw-c-2a3444: #2a3444;
+  --color-kw-c-2b3644: #2b3644;
+  --color-kw-c-306186: #306186;
+  --color-kw-c-334155: #334155;
+  --color-kw-c-3a1e2a: #3a1e2a;
+  --color-kw-c-3a4658: #3a4658;
+  --color-kw-c-3b1218: #3b1218;
+  --color-kw-c-3b4658: #3b4658;
+  --color-kw-c-414d60: #414d60;
+  --color-kw-c-4a5a70: #4a5a70;
+  --color-kw-c-4ade80: #4ade80;
+  --color-kw-c-526074: #526074;
+  --color-kw-c-526276: #526276;
+  --color-kw-c-54657c: #54657c;
+  --color-kw-c-59667a: #59667a;
+  --color-kw-c-5c6672: #5c6672;
+  --color-kw-c-5f6b78: #5f6b78;
+  --color-kw-c-64748b: #64748b;
+  --color-kw-c-66717f: #66717f;
+  --color-kw-c-687386: #687386;
+  --color-kw-c-687482: #687482;
+  --color-kw-c-6a7480: #6a7480;
+  --color-kw-c-6f7a8a: #6f7a8a;
+  --color-kw-c-74101d: #74101d;
+  --color-kw-c-758292: #758292;
+  --color-kw-c-7e8ea5: #7e8ea5;
+  --color-kw-c-8794a5: #8794a5;
+  --color-kw-c-8f1020: #8f1020;
+  --color-kw-c-91a0b4: #91a0b4;
+  --color-kw-c-991b1b: #991b1b;
+  --color-kw-c-a7b0bf: #a7b0bf;
+  --color-kw-c-b9c5d6: #b9c5d6;
+  --color-kw-c-cbd5e1: #cbd5e1;
+  --color-kw-c-d6dfec: #d6dfec;
+  --color-kw-c-d8e1ee: #d8e1ee;
+  --color-kw-c-d8f3e5: #d8f3e5;
+  --color-kw-c-d91f30: #d91f30;
+  --color-kw-c-d9e0ea: #d9e0ea;
+  --color-kw-c-dbe7f5: #dbe7f5;
+  --color-kw-c-dce3ee: #dce3ee;
+  --color-kw-c-dce7f5: #dce7f5;
+  --color-kw-c-e1e8f2: #e1e8f2;
+  --color-kw-c-e3e3e8: #e3e3e8;
+  --color-kw-c-e3e9f1: #e3e9f1;
+  --color-kw-c-e6edf6: #e6edf6;
+  --color-kw-c-e7ecf3: #e7ecf3;
+  --color-kw-c-e8edf5: #e8edf5;
+  --color-kw-c-edf2f7: #edf2f7;
+  --color-kw-c-eef2f6: #eef2f6;
+  --color-kw-c-eef2f7: #eef2f7;
+  --color-kw-c-eef3f8: #eef3f8;
+  --color-kw-c-ef2334: #ef2334;
+  --color-kw-c-f0f3f8: #f0f3f8;
+  --color-kw-c-f1f4f8: #f1f4f8;
+  --color-kw-c-f3f6fa: #f3f6fa;
+  --color-kw-c-f59e0b: #f59e0b;
+  --color-kw-c-f7f8fb: #f7f8fb;
+  --color-kw-c-f87171: #f87171;
+  --color-kw-c-f8fafc: #f8fafc;
+  --color-kw-c-fdfdfd: #fdfdfd;
+  --color-kw-c-ff3b4f: #ff3b4f;
+  --color-kw-c-ff4b55: #ff4b55;
+  --color-kw-c-ff5a66: #ff5a66;
+  --color-kw-c-ff5a69: #ff5a69;
+  --color-kw-c-ff6b7a: #ff6b7a;
+  --color-kw-c-ffe4e6: #ffe4e6;
+  --color-kw-c-fff1f2: #fff1f2;
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -228,6 +316,164 @@
   .dark .student-wizard .student-wizard-input:focus {
     border-color: #ff5a69;
     box-shadow: 0 0 0 3px rgb(255 90 105 / 0.14);
+  }
+}
+
+@layer utilities {
+  .bg-kw-login-gradient {
+    background: linear-gradient(135deg, rgb(10 40 75), rgb(15 55 100));
+  }
+
+  .kw-dark-card-gradient {
+    background: inherit;
+  }
+
+  .dark .kw-dark-card-gradient {
+    background: linear-gradient(180deg, #1e2a39 0%, #182331 100%);
+  }
+
+  .dark .kw-dark-card-gradient-hover:hover {
+    background: linear-gradient(180deg, #223044 0%, #1b2635 100%);
+  }
+
+  .dark .kw-dark-avatar-gradient {
+    background: radial-gradient(circle at top, #354154 0%, #263141 100%);
+  }
+
+  .text-kw-10 {
+    font-size: 0.625rem;
+  }
+
+  .text-kw-08 {
+    font-size: 0.8rem;
+  }
+
+  .text-kw-11 {
+    font-size: 0.6875rem;
+  }
+
+  .text-kw-12 {
+    font-size: 0.75rem;
+  }
+
+  .text-kw-14 {
+    font-size: 0.875rem;
+  }
+
+  .text-kw-15 {
+    font-size: 0.9375rem;
+  }
+
+  .text-kw-18 {
+    font-size: 1.125rem;
+  }
+
+  .text-kw-30 {
+    font-size: 1.875rem;
+  }
+
+  .text-login-hero {
+    font-size: clamp(34px, 3.1vw, 58px);
+  }
+
+  .text-login-brand {
+    font-size: clamp(34px, 3.2vw, 60px);
+  }
+
+  .text-owner-branch-hero {
+    font-size: clamp(46px, 4.2vw, 68px);
+  }
+
+  .text-owner-branch-title {
+    font-size: clamp(30px, 2.8vw, 44px);
+  }
+
+  .shadow-kw-login-button {
+    box-shadow: 0 14px 28px rgb(10 40 75 / 0.22);
+  }
+
+  .shadow-kw-red-glow {
+    box-shadow: 0 0 22px rgb(239 35 52 / 0.35);
+  }
+
+  .dark .kw-dark-shadow-red-glow {
+    box-shadow: 0 0 24px rgb(255 59 79 / 0.35);
+  }
+
+  .drop-shadow-kw-logo {
+    filter: drop-shadow(0 1px 3px rgb(255 255 255 / 0.35));
+  }
+
+  .drop-shadow-kw-logo-strong {
+    filter: drop-shadow(0 1px 3px rgb(255 255 255 / 0.45));
+  }
+
+  .shadow-kw-step {
+    box-shadow: 0 12px 30px rgb(239 35 52 / 0.28);
+  }
+
+  .shadow-kw-action {
+    box-shadow: 0 12px 26px rgb(239 35 52 / 0.28);
+  }
+
+  .shadow-kw-wizard {
+    box-shadow: 0 12px 35px rgb(10 40 75 / 0.08);
+  }
+
+  .shadow-kw-inset-top {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  .shadow-kw-panel-soft {
+    box-shadow: 0 18px 55px rgb(10 40 75 / 0.08);
+  }
+
+  .shadow-kw-panel {
+    box-shadow: 0 24px 70px rgb(10 40 75 / 0.12);
+  }
+
+  .shadow-kw-panel-strong {
+    box-shadow: 0 24px 70px rgb(10 40 75 / 0.14);
+  }
+
+  .shadow-kw-card {
+    box-shadow: 0 18px 55px rgb(10 40 75 / 0.12);
+  }
+
+  .shadow-kw-card-hover:hover {
+    box-shadow: 0 22px 65px rgb(10 40 75 / 0.18);
+  }
+
+  .shadow-kw-soft-hover:hover {
+    box-shadow: 0 22px 65px rgb(10 40 75 / 0.14);
+  }
+
+  .shadow-kw-onboarding {
+    box-shadow: 0 24px 80px rgb(10 40 75 / 0.1);
+  }
+
+  .shadow-kw-line-card {
+    box-shadow: 0 18px 50px rgb(10 40 75 / 0.1);
+  }
+
+  .dark .kw-dark-shadow-panel {
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.32);
+  }
+
+  .dark .kw-dark-shadow-panel-strong {
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.34);
+  }
+
+  .dark .kw-dark-shadow-form {
+    box-shadow: 0 28px 80px rgb(0 0 0 / 0.34);
+  }
+
+  .dark .kw-dark-shadow-card {
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.28);
+  }
+
+  .dark .kw-dark-shadow-soft {
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.18);
   }
 }
 

@@ -314,6 +314,7 @@ export async function saveBranchManagementAction(
           closing_time: parsed.data.closingTime,
         },
         token,
+        idempotencyKey ? `${idempotencyKey}:branch` : undefined,
       );
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -324,7 +325,11 @@ export async function saveBranchManagementAction(
 
     if (parsed.data.removePhoto && parsed.data.photoFileID) {
       try {
-        await deleteFile(parsed.data.photoFileID, token);
+        await deleteFile(
+          parsed.data.photoFileID,
+          token,
+          idempotencyKey ? `${idempotencyKey}:photo-delete` : undefined,
+        );
       } catch (error) {
         if (!(error instanceof ApiError && error.status === 404)) {
           throw error;
@@ -365,7 +370,11 @@ export async function saveBranchManagementAction(
     const rooms: Room[] = [];
     for (const id of removedRoomIDs.data) {
       try {
-        await deleteRoom(id, token);
+        await deleteRoom(
+          id,
+          token,
+          idempotencyKey ? `${idempotencyKey}:room-delete:${id}` : undefined,
+        );
       } catch (error) {
         if (!(error instanceof ApiError && error.status === 404)) {
           throw error;
@@ -385,6 +394,9 @@ export async function saveBranchManagementAction(
               capacity: room.capacity,
             },
             token,
+            idempotencyKey
+              ? `${idempotencyKey}:room-update:${room.id}`
+              : undefined,
           ),
         );
       } catch (error) {
@@ -443,9 +455,10 @@ export async function deleteBranchAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   try {
-    const branch = await deleteBranch(branchID, token);
+    const branch = await deleteBranch(branchID, token, idempotencyKey);
     return { branch };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
@@ -501,34 +514,40 @@ export async function createStaffAction(
     );
 
     if (photoValidation.file) {
-      const file = await uploadStaffPhoto(
-        parsed.data.branchID,
-        staff.id,
-        photoValidation.file,
-        token,
-      );
-      const download = await getFileDownloadURL(file.id, token);
-      staff = await updateStaff(
-        staff.id,
-        {
-          birth_date: parsed.data.birthDate,
-          email: parsed.data.email,
-          first_name: parsed.data.firstName,
-          gender: parsed.data.gender,
-          address: parsed.data.address,
-          hired_at: parsed.data.hiredAt,
-          last_name: parsed.data.lastName,
-          phone: parsed.data.phone,
+      try {
+        const file = await uploadStaffPhoto(
+          parsed.data.branchID,
+          staff.id,
+          photoValidation.file,
+          token,
+        );
+        const download = await getFileDownloadURL(file.id, token);
+        staff = await updateStaff(
+          staff.id,
+          {
+            birth_date: parsed.data.birthDate,
+            email: parsed.data.email,
+            first_name: parsed.data.firstName,
+            gender: parsed.data.gender,
+            address: parsed.data.address,
+            hired_at: parsed.data.hiredAt,
+            last_name: parsed.data.lastName,
+            phone: parsed.data.phone,
+            profile_photo_file_id: file.id,
+            salary_amount_azn: salaryAmount(parsed.data.salary),
+          },
+          token,
+          idempotencyKey ? `${idempotencyKey}:photo-update` : undefined,
+        );
+        staff = {
+          ...staff,
           profile_photo_file_id: file.id,
-          salary_amount_azn: salaryAmount(parsed.data.salary),
-        },
-        token,
-      );
-      staff = {
-        ...staff,
-        profile_photo_file_id: file.id,
-        profile_photo_url: download.url,
-      };
+          profile_photo_url: download.url,
+        };
+      } catch {
+        // Staff creation is the critical write. Keep the saved receptionist
+        // visible even if the optional profile photo update fails.
+      }
     }
 
     return { staff };
@@ -565,6 +584,7 @@ export async function updateStaffAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   const photoValidation = validateBranchPhoto(formData.get("photo"));
   if (photoValidation.error) {
@@ -577,7 +597,11 @@ export async function updateStaffAction(
 
     if (parsed.data.removePhoto && profilePhotoFileID) {
       try {
-        await deleteFile(profilePhotoFileID, token);
+        await deleteFile(
+          profilePhotoFileID,
+          token,
+          idempotencyKey ? `${idempotencyKey}:photo-delete` : undefined,
+        );
       } catch (error) {
         if (!(error instanceof ApiError && error.status === 404)) {
           throw error;
@@ -616,6 +640,7 @@ export async function updateStaffAction(
         salary_amount_azn: salaryAmount(parsed.data.salary),
       },
       token,
+      idempotencyKey ? `${idempotencyKey}:staff-update` : undefined,
     );
 
     return {
@@ -652,9 +677,10 @@ export async function deleteStaffAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   try {
-    const staff = await deleteStaff(staffID, token);
+    const staff = await deleteStaff(staffID, token, idempotencyKey);
     return { staff, deletedStaffID: staff.id };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {

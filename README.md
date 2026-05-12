@@ -1009,6 +1009,62 @@ Only use Docker again after explicit instruction.
   - Replaced the now-empty academic `service.go` package comment file with `doc.go`.
   - No business logic or API contract changed.
   - Verification passed with Docker disabled: backend `go test ./...`, backend `golangci-lint run`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 1 auth/session hardening:
+  - Wired frontend logout to backend `POST /v1/auth/logout` before clearing the local auth cookie, so backend token-version revocation is used.
+  - Added a local `/api/auth/clear-session` route to delete stale/invalid auth cookies and redirect back to login with an expired-session marker.
+  - Updated dashboard session guard to use the clear-session route when a cookie exists but backend session validation fails.
+  - Hardened proxy login handling so `?session=expired` can clear stale cookies instead of bouncing back to dashboard.
+  - Added the shared submit lock to the login form submit button to reduce rapid/double submit risk.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 2 API/action consistency:
+  - Extended frontend API helpers so critical PATCH/DELETE calls can forward `Idempotency-Key` consistently.
+  - Added idempotency keys to branch detail save/delete, teacher delete, receptionist delete, staff update/delete, branch room update/delete, and photo-delete follow-up actions.
+  - Changed create flows so optional profile-photo follow-up failures do not present an already-created branch/staff/teacher/student as a failed core registration.
+  - Reordered student creation so the student account is created before optional photo follow-up work.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 3 performance pass:
+  - Stopped the owner dashboard route from loading branch photos and per-branch dashboard stats for every owner view.
+  - Branch photos are now loaded only for Branch Management and the main dashboard, and branch stats are loaded only for Branch Management.
+  - Parallelized Branch Management data loading for branch photos, stats, rooms, and staff lists.
+  - Optimized Add Student course/teacher rendering by grouping active teachers by branch/subject once instead of filtering/parsing teacher subjects for each selected course render.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 4 component architecture cleanup:
+  - Added shared owner form primitives under `frontend/src/components/owner/shared`: profile photo upload avatar, email availability status, and locked submit button.
+  - Rewired Add Teacher and Add Student forms to use the shared primitives without changing their behavior or API payloads.
+  - Reduced `add-teacher-form.tsx` and `add-student-form.tsx` duplication, making future registration forms less likely to diverge.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 5 cleanup:
+  - Removed the legacy Branch Detail staff-management UI block that had already been moved to Receptionist Management and was kept only behind an eslint unused-code suppression.
+  - Removed the now-unused staff create/edit/delete imports and local staff form helpers from `branch-management-view.tsx`.
+  - Moved duplicate `DD/MM/YYYY` input formatting into `frontend/src/lib/forms/date-format.ts` and reused it from Add Student and Receptionist Management.
+  - Reduced `branch-management-view.tsx` from about 77 KB to about 60 KB without changing active Branch Management behavior.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend large-component/image follow-up:
+  - Replaced remaining direct `<img>` usage in owner UI with the shared `ObjectCoverImage`/`next/image` wrapper.
+  - Split low-risk owner UI pieces out of large files: Add Student wizard parts, Branch Management table/stat parts, and Receptionist status/email helper parts.
+  - Current large-file sizes: `branch-management-view.tsx` ~56.9 KB, `receptionist-management-view.tsx` ~44.4 KB, `add-student-form.tsx` ~24.0 KB.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend theme token pass:
+  - Moved component/app hardcoded hex colors into Tailwind theme tokens in `frontend/src/app/globals.css`.
+  - Replaced component/app arbitrary theme classes such as `bg-[#...]`, `text-[#...]`, `border-[#...]`, `ring-[#...]`, `accent-[#...]`, `stroke-[#...]`, `shadow-[...]`, direct hex style values, and local gradient classes with token/utility classes.
+  - Current audit result for `frontend/src/components` and `frontend/src/app`: no direct `#RRGGBB` color literals in `.tsx`, and no `bg-[...]`, `text-[...]`, `border-[...]`, `shadow-[...]`, `drop-shadow-[...]`, or `ring-[#...]` theme classes remain.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend owner component split pass:
+  - Split Branch Detail and its room/save helpers into `branch-detail-page.tsx`, leaving `branch-management-view.tsx` focused on branch list/create/delete orchestration.
+  - Split Receptionist create/edit form into `receptionist-staff-editor.tsx`, leaving `receptionist-management-view.tsx` focused on branch filtering, receptionist list rows, animation shell, and delete flow.
+  - Current owner file sizes: `branch-management-view.tsx` ~31.9 KB, `branch-detail-page.tsx` ~26.3 KB, `receptionist-management-view.tsx` ~23.0 KB, `receptionist-staff-editor.tsx` ~22.5 KB.
+  - Client component boundary count remains 30; extracted files are imported through existing client components rather than adding new top-level client boundaries.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, and `git diff --check`.
+- 2026-05-13 Frontend verification hang check:
+  - Checked for lingering `node`/`npm` processes after a prior parallel lint/build run appeared stuck; no active Node/npm process remained.
+  - Re-ran frontend verification sequentially to avoid terminal/session contention.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
+- 2026-05-13 Frontend independent audit:
+  - Re-scanned frontend from current code state, independent of previous scoring.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, and `git diff --check`.
+  - Current audit positives: no direct `<img>` usage in `frontend/src`, no direct `#RRGGBB` color literals in TS/TSX, no `bg-[#...]`/`text-[#...]`/`border-[#...]` theme classes remain, and critical write actions use idempotency keys.
+  - Current audit gaps: several medium-large owner/client components remain, frontend E2E coverage is still smoke-level, full responsive/WCAG browser audit is not complete, and `npm audit --audit-level=high` reports high advisories through `next@16.2.4`.
+  - Current frontend score: 8.1/10. Live-prep work to reach 10/10: dependency security update, broader E2E regression, accessibility/responsive pass, deeper component split, and production observability.
 
 ## Next Steps
 

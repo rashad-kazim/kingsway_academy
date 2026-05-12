@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginAction, type LoginActionState } from "@/lib/auth/actions";
+import { useSubmitLock } from "@/lib/forms/use-submit-lock";
 import { useDevAssetSrc } from "@/lib/use-dev-asset-src";
 
 type LoginFormLabels = {
@@ -59,10 +60,10 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
       </div>
 
       <div className="mb-7 space-y-3">
-        <h1 className="text-[30px] font-black leading-none text-[#0a284b]">
+        <h1 className="text-kw-30 font-black leading-none text-kw-c-0a284b">
           {labels.title}
         </h1>
-        <p className="text-[15px] font-medium text-[#687386]">
+        <p className="text-kw-15 font-medium text-kw-c-687386">
           {labels.description}
         </p>
       </div>
@@ -74,14 +75,14 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
         {message ? (
           <Alert
             variant="destructive"
-            className="border-[#ef2334]/25 bg-[#ef2334]/10 text-[#ef2334]"
+            className="border-kw-c-ef2334/25 bg-kw-c-ef2334/10 text-kw-c-ef2334"
           >
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
 
         <div className="space-y-2">
-          <Label htmlFor="email" className="text-[14px] font-semibold text-[#0a284b]">
+          <Label htmlFor="email" className="text-kw-14 font-semibold text-kw-c-0a284b">
             {labels.email}
           </Label>
           <Input
@@ -90,7 +91,7 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
             type="email"
             autoComplete="email"
             aria-invalid={emailInvalid}
-            className="h-[44px] rounded-[5px] border-[#0a284b] bg-[#fdfdfd] px-3 text-[15px] text-black shadow-none focus-visible:border-[#0a284b] focus-visible:ring-2 focus-visible:ring-[#0a284b]/20 aria-invalid:border-[#ef2334] aria-invalid:focus-visible:border-[#ef2334] aria-invalid:focus-visible:ring-[#ef2334]/20"
+            className="h-[44px] rounded-[5px] border-kw-c-0a284b bg-kw-c-fdfdfd px-3 text-kw-15 text-black shadow-none focus-visible:border-kw-c-0a284b focus-visible:ring-2 focus-visible:ring-kw-c-0a284b/20 aria-invalid:border-kw-c-ef2334 aria-invalid:focus-visible:border-kw-c-ef2334 aria-invalid:focus-visible:ring-kw-c-ef2334/20"
             required
           />
         </div>
@@ -98,7 +99,7 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
         <div className="space-y-2">
           <Label
             htmlFor="password"
-            className="text-[14px] font-semibold text-[#0a284b]"
+            className="text-kw-14 font-semibold text-kw-c-0a284b"
           >
             {labels.password}
           </Label>
@@ -109,14 +110,14 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               aria-invalid={passwordInvalid}
-              className="h-[44px] rounded-[5px] border-[#0a284b] bg-[#fdfdfd] px-3 pr-11 text-[15px] text-black shadow-none focus-visible:border-[#0a284b] focus-visible:ring-2 focus-visible:ring-[#0a284b]/20 aria-invalid:border-[#ef2334] aria-invalid:focus-visible:border-[#ef2334] aria-invalid:focus-visible:ring-[#ef2334]/20"
+              className="h-[44px] rounded-[5px] border-kw-c-0a284b bg-kw-c-fdfdfd px-3 pr-11 text-kw-15 text-black shadow-none focus-visible:border-kw-c-0a284b focus-visible:ring-2 focus-visible:ring-kw-c-0a284b/20 aria-invalid:border-kw-c-ef2334 aria-invalid:focus-visible:border-kw-c-ef2334 aria-invalid:focus-visible:ring-kw-c-ef2334/20"
               required
             />
             <button
               type="button"
               aria-label={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword((current) => !current)}
-              className="absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-[#0a284b]/60 transition-colors hover:bg-[#eef2f7] hover:text-[#0a284b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a284b]/25"
+              className="absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-kw-c-0a284b/60 transition-colors hover:bg-kw-c-eef2f7 hover:text-kw-c-0a284b focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kw-c-0a284b/25"
             >
               {showPassword ? (
                 <EyeOff className="size-4" />
@@ -129,7 +130,7 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
 
         <button
           type="button"
-          className="text-[14px] font-semibold text-[#0a284b] transition-colors hover:text-[#0f3764] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a284b]/25"
+          className="text-kw-14 font-semibold text-kw-c-0a284b transition-colors hover:text-kw-c-0f3764 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kw-c-0a284b/25"
         >
           {labels.forgotPassword}
         </button>
@@ -142,12 +143,14 @@ export function LoginForm({ locale, nextPath, labels }: LoginFormProps) {
 
 function SubmitButton({ labels }: { labels: LoginFormLabels }) {
   const { pending } = useFormStatus();
+  const submitLock = useSubmitLock(pending);
 
   return (
     <Button
-      className="mt-4 h-[48px] w-full rounded-[9px] bg-[#0a284b] text-[15px] font-bold text-white shadow-[0_14px_28px_rgba(10,40,75,0.22)] transition-colors hover:bg-[#0f3764]"
+      className="mt-4 h-[48px] w-full rounded-[9px] bg-kw-c-0a284b text-kw-15 font-bold text-white shadow-kw-login-button transition-colors hover:bg-kw-c-0f3764"
       type="submit"
-      disabled={pending}
+      disabled={pending || submitLock.locked}
+      onClick={submitLock.onClick}
     >
       {pending ? labels.pending : labels.submit}
     </Button>

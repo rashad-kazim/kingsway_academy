@@ -79,7 +79,7 @@ export function TopbarControls({
         <DropdownMenuTrigger asChild>
           <Button
             aria-label={labels.language}
-            className="gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-white hover:bg-white/15 hover:text-white dark:border-[#3b4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:bg-[#263448] dark:hover:text-white"
+            className="gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-white hover:bg-white/15 hover:text-white dark:border-kw-c-3b4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa dark:hover:bg-kw-c-263448 dark:hover:text-white"
             type="button"
             variant="ghost"
           >
@@ -106,8 +106,8 @@ export function TopbarControls({
       <button
         aria-label={darkMode ? labels.switchToLight : labels.switchToDark}
         className={cn(
-          "relative grid h-9 w-[74px] cursor-pointer grid-cols-2 items-center rounded-full border border-white/15 px-1 transition-colors hover:bg-white/15 dark:border-[#3b4658] dark:hover:bg-[#263448]",
-          darkMode ? "bg-[#0b1622] text-[#e7ecf3]" : "bg-white/10 text-white",
+          "relative grid h-9 w-[74px] cursor-pointer grid-cols-2 items-center rounded-full border border-white/15 px-1 transition-colors hover:bg-white/15 dark:border-kw-c-3b4658 dark:hover:bg-kw-c-263448",
+          darkMode ? "bg-kw-c-0b1622 text-kw-c-e7ecf3" : "bg-white/10 text-white",
         )}
         type="button"
         onClick={() => setTheme(darkMode ? "light" : "dark")}
@@ -116,7 +116,7 @@ export function TopbarControls({
         <Moon className="z-10 mx-auto size-4 opacity-70" />
         <span
           className={cn(
-            "absolute top-1 flex size-7 items-center justify-center rounded-full bg-white text-[#0a284b] shadow-sm transition-transform duration-300 ease-in-out dark:bg-[#f3f6fa] dark:text-[#0b1622]",
+            "absolute top-1 flex size-7 items-center justify-center rounded-full bg-white text-kw-c-0a284b shadow-sm transition-transform duration-300 ease-in-out dark:bg-kw-c-f3f6fa dark:text-kw-c-0b1622",
             darkMode ? "translate-x-[39px]" : "translate-x-1",
           )}
         >
@@ -160,14 +160,14 @@ export function ProfileMenu({
         <button
           aria-label={labels.profileMenu}
           className={cn(
-            "flex cursor-pointer items-center gap-3 rounded-md text-left text-white transition-colors hover:bg-white/10 dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]",
+            "flex cursor-pointer items-center gap-3 rounded-md text-left text-white transition-colors hover:bg-white/10 dark:text-kw-c-f3f6fa dark:hover:bg-kw-c-202d3e",
             sidebar ? "h-14 w-full px-3" : "px-2 py-1.5",
             sidebar && !open && "h-12 justify-center px-0",
           )}
           type="button"
         >
           <Avatar className="size-10 shrink-0">
-            <AvatarFallback className="bg-white text-sm font-black text-[#0a284b]">
+            <AvatarFallback className="bg-white text-sm font-black text-kw-c-0a284b">
               {initials(userName)}
             </AvatarFallback>
           </Avatar>
@@ -182,11 +182,11 @@ export function ProfileMenu({
                 <span className="max-w-44 truncate text-sm font-bold">
                   {userName}
                 </span>
-                <span className="mt-0.5 text-xs font-medium text-white/70 dark:text-[#a7b0bf]">
+                <span className="mt-0.5 text-xs font-medium text-white/70 dark:text-kw-c-a7b0bf">
                   {labels.roles[role]}
                 </span>
               </span>
-              <ChevronDown className="ml-auto size-4 shrink-0 text-white/75 dark:text-[#a7b0bf]" />
+              <ChevronDown className="ml-auto size-4 shrink-0 text-white/75 dark:text-kw-c-a7b0bf" />
             </>
           ) : null}
         </button>
@@ -208,10 +208,10 @@ export function ProfileMenu({
           <input name="locale" type="hidden" value={locale} />
           <DropdownMenuItem
             asChild
-            className="cursor-pointer transition-colors focus:text-[#ef2334] data-[highlighted]:text-[#ef2334] data-[highlighted]:[&_svg]:text-[#ef2334] dark:focus:text-[#ff3b4f] dark:data-[highlighted]:text-[#ff3b4f] dark:data-[highlighted]:[&_svg]:text-[#ff3b4f]"
+            className="cursor-pointer transition-colors focus:text-kw-c-ef2334 data-[highlighted]:text-kw-c-ef2334 data-[highlighted]:[&_svg]:text-kw-c-ef2334 dark:focus:text-kw-c-ff3b4f dark:data-[highlighted]:text-kw-c-ff3b4f dark:data-[highlighted]:[&_svg]:text-kw-c-ff3b4f"
           >
             <button
-              className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:text-[#ef2334] focus:text-[#ef2334] dark:hover:text-[#ff3b4f] dark:focus:text-[#ff3b4f] [&_svg]:stroke-current [&_svg]:transition-colors"
+              className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:text-kw-c-ef2334 focus:text-kw-c-ef2334 dark:hover:text-kw-c-ff3b4f dark:focus:text-kw-c-ff3b4f [&_svg]:stroke-current [&_svg]:transition-colors"
               type="submit"
             >
               <LogOut className="size-4" />

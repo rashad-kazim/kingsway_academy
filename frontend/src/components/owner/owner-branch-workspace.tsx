@@ -29,6 +29,7 @@ import {
   TopbarControls,
   type ChromeLabels,
 } from "@/components/layout/topbar-controls";
+import { ObjectCoverImage } from "@/components/owner/shared/object-cover-image";
 import type { Branch } from "@/lib/api/types";
 import {
   createBranchAction,
@@ -202,10 +203,10 @@ export function OwnerBranchWorkspace({
   }
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#f7f8fb] text-[#0a284b] transition-colors dark:bg-[#0b1622] dark:text-[#f3f6fa]">
-      <header className="relative z-20 flex h-20 shrink-0 items-center justify-between border-b border-transparent bg-[#0a284b] px-10 text-white shadow-sm dark:border-[#293445] dark:bg-[#121f2d] dark:text-[#f3f6fa]">
+    <main className="fixed inset-0 overflow-hidden bg-kw-c-f7f8fb text-kw-c-0a284b transition-colors dark:bg-kw-c-0b1622 dark:text-kw-c-f3f6fa">
+      <header className="relative z-20 flex h-20 shrink-0 items-center justify-between border-b border-transparent bg-kw-c-0a284b px-10 text-white shadow-sm dark:border-kw-c-293445 dark:bg-kw-c-121f2d dark:text-kw-c-f3f6fa">
         <Link
-          className="flex cursor-pointer items-center gap-4 dark:text-[#f3f6fa]"
+          className="flex cursor-pointer items-center gap-4 dark:text-kw-c-f3f6fa"
           href={`/${locale}/dashboard/owner`}
         >
           <Image
@@ -215,10 +216,10 @@ export function OwnerBranchWorkspace({
             height={499}
             priority
             unoptimized={process.env.NODE_ENV === "development"}
-            className="size-14 object-contain drop-shadow-[0_1px_3px_rgba(255,255,255,0.45)]"
+            className="size-14 object-contain drop-shadow-kw-logo-strong"
           />
           <div>
-            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-[#ff4b55] dark:text-[#ff3b4f]">
+            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-kw-c-ff4b55 dark:text-kw-c-ff3b4f">
               {labels.common.brand}
             </div>
             <div className="text-xl font-black leading-none">
@@ -315,38 +316,37 @@ function BranchSetupForm({
     <div className="grid h-full items-center gap-[3.6rem] lg:grid-cols-2">
       <div className="animate-[owner-copy-in_650ms_ease-out_both] justify-self-center space-y-7">
         <div
-          className="inline-flex items-center gap-3 rounded-full border border-[#dce3ee] bg-white px-6 py-3 text-lg font-bold text-[#0a284b] shadow-sm dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa]"
+          className="inline-flex items-center gap-3 rounded-full border border-kw-c-dce3ee bg-white px-6 py-3 text-lg font-bold text-kw-c-0a284b shadow-sm dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa"
         >
-          <School className="size-5 text-[#ef2334] dark:text-[#ff3b4f]" />
+          <School className="size-5 text-kw-c-ef2334 dark:text-kw-c-ff3b4f" />
           {labels.initialBranchSetup}
         </div>
         <div className="space-y-5">
-          <h1 className="max-w-[620px] text-[clamp(46px,4.2vw,68px)] font-black leading-[1.05] tracking-tight">
+          <h1 className="max-w-[620px] text-owner-branch-hero font-black leading-[1.05] tracking-tight">
             <HighlightedTitle title={labels.title} />
           </h1>
-          <p className="max-w-xl text-[18px] leading-8 text-[#59667a] dark:text-[#a7b0bf]">
+          <p className="max-w-xl text-kw-18 leading-8 text-kw-c-59667a dark:text-kw-c-a7b0bf">
             {labels.description}
           </p>
         </div>
       </div>
 
-      <Card className="w-full max-w-[720px] justify-self-center rounded-lg border-[#dce3ee] bg-white shadow-[0_24px_80px_rgba(10,40,75,0.10)] dark:border-[#3a4658] dark:bg-[linear-gradient(180deg,#1e2a39_0%,#182331_100%)] dark:text-[#f3f6fa] dark:shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+      <Card className="w-full max-w-[720px] justify-self-center rounded-lg border-kw-c-dce3ee bg-white shadow-kw-onboarding dark:border-kw-c-3a4658 kw-dark-card-gradient dark:text-kw-c-f3f6fa kw-dark-shadow-card">
         <CardContent className="p-7">
           <form action={formAction} className="space-y-5">
             <div>
-              <Label className="mb-3 block text-sm font-bold text-[#0a284b] dark:text-[#f3f6fa]">
+              <Label className="mb-3 block text-sm font-bold text-kw-c-0a284b dark:text-kw-c-f3f6fa">
                 {labels.branchPhoto}
               </Label>
-              <label className="group flex h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg bg-[#f7f8fb] text-center transition-colors hover:bg-[#f1f4f8] dark:bg-[#202b3a] dark:hover:bg-[#263448]">
+              <label className="group relative flex h-36 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg bg-kw-c-f7f8fb text-center transition-colors hover:bg-kw-c-f1f4f8 dark:bg-kw-c-202b3a dark:hover:bg-kw-c-263448">
                 {photoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photoPreview}
-                    alt=""
-                    className="size-28 rounded-full border border-dashed border-[#b9c5d6] object-cover shadow-md dark:border-[#414d60]"
-                  />
+                  <span
+                    className="relative block size-28 overflow-hidden rounded-full border border-dashed border-kw-c-b9c5d6 shadow-md dark:border-kw-c-414d60"
+                  >
+                    <ObjectCoverImage src={photoPreview} />
+                  </span>
                 ) : (
-                  <span className="flex size-28 items-center justify-center rounded-full border border-dashed border-[#b9c5d6] bg-white text-[#0a284b] shadow-inner transition-colors group-hover:border-[#0a284b] dark:border-[#414d60] dark:bg-[#2a3444] dark:text-[#f3f6fa] dark:group-hover:border-[#54657c]">
+                  <span className="flex size-28 items-center justify-center rounded-full border border-dashed border-kw-c-b9c5d6 bg-white text-kw-c-0a284b shadow-inner transition-colors group-hover:border-kw-c-0a284b dark:border-kw-c-414d60 dark:bg-kw-c-2a3444 dark:text-kw-c-f3f6fa dark:group-hover:border-kw-c-54657c">
                     <ImagePlus className="size-8" />
                   </span>
                 )}
@@ -388,7 +388,7 @@ function BranchSetupForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="branch-name" className="font-bold text-[#0a284b] dark:text-[#f3f6fa]">
+              <Label htmlFor="branch-name" className="font-bold text-kw-c-0a284b dark:text-kw-c-f3f6fa">
                 {labels.branchName}
               </Label>
               <div className="relative">
@@ -398,9 +398,9 @@ function BranchSetupForm({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   className={cn(
-                    "h-11 rounded-md border-[#0a284b] bg-white pr-11 text-black focus-visible:ring-[#0a284b]/20 dark:border-[#3a4658] dark:bg-[#0b1622] dark:text-[#f3f6fa] dark:focus-visible:border-[#54657c] dark:focus-visible:ring-[#54657c]/30",
+                    "h-11 rounded-md border-kw-c-0a284b bg-white pr-11 text-black focus-visible:ring-kw-c-0a284b/20 dark:border-kw-c-3a4658 dark:bg-kw-c-0b1622 dark:text-kw-c-f3f6fa dark:focus-visible:border-kw-c-54657c dark:focus-visible:ring-kw-c-54657c/30",
                     nameHasError &&
-                      "border-[#ef2334] focus-visible:ring-[#ef2334]/20 dark:border-[#ff5a69] dark:focus-visible:border-[#ff5a69] dark:focus-visible:ring-[#ff5a69]/30",
+                      "border-kw-c-ef2334 focus-visible:ring-kw-c-ef2334/20 dark:border-kw-c-ff5a69 dark:focus-visible:border-kw-c-ff5a69 dark:focus-visible:ring-kw-c-ff5a69/30",
                   )}
                   required
                 />
@@ -408,7 +408,7 @@ function BranchSetupForm({
                   {nameAccepted ? (
                     <CheckCircle2 className="size-5 text-emerald-600" />
                   ) : name.trim().length > 0 ? (
-                    <XCircle className="size-5 text-[#ef2334] dark:text-[#ff5a69]" />
+                    <XCircle className="size-5 text-kw-c-ef2334 dark:text-kw-c-ff5a69" />
                   ) : null}
                 </div>
               </div>
@@ -421,7 +421,7 @@ function BranchSetupForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="branch-address" className="font-bold text-[#0a284b] dark:text-[#f3f6fa]">
+              <Label htmlFor="branch-address" className="font-bold text-kw-c-0a284b dark:text-kw-c-f3f6fa">
                 {labels.address}
               </Label>
               <Textarea
@@ -430,9 +430,9 @@ function BranchSetupForm({
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
                 className={cn(
-                  "min-h-24 resize-none rounded-md border-[#0a284b] bg-white text-black focus-visible:ring-[#0a284b]/20 dark:border-[#3a4658] dark:bg-[#0b1622] dark:text-[#f3f6fa] dark:focus-visible:border-[#54657c] dark:focus-visible:ring-[#54657c]/30",
+                  "min-h-24 resize-none rounded-md border-kw-c-0a284b bg-white text-black focus-visible:ring-kw-c-0a284b/20 dark:border-kw-c-3a4658 dark:bg-kw-c-0b1622 dark:text-kw-c-f3f6fa dark:focus-visible:border-kw-c-54657c dark:focus-visible:ring-kw-c-54657c/30",
                   addressHasError &&
-                    "border-[#ef2334] focus-visible:ring-[#ef2334]/20 dark:border-[#ff5a69] dark:focus-visible:border-[#ff5a69] dark:focus-visible:ring-[#ff5a69]/30",
+                    "border-kw-c-ef2334 focus-visible:ring-kw-c-ef2334/20 dark:border-kw-c-ff5a69 dark:focus-visible:border-kw-c-ff5a69 dark:focus-visible:ring-kw-c-ff5a69/30",
                 )}
                 required
               />
@@ -501,7 +501,7 @@ function HighlightedTitle({ title }: { title: string }) {
   return (
     <>
       {before}
-      <span className="text-[#ef2334] dark:text-[#ff3b4f]">Kingsway</span>
+      <span className="text-kw-c-ef2334 dark:text-kw-c-ff3b4f">Kingsway</span>
       {after}
     </>
   );
@@ -509,8 +509,8 @@ function HighlightedTitle({ title }: { title: string }) {
 
 function InlineError({ children }: { children: ReactNode }) {
   return (
-    <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-[#ef2334] dark:text-[#ff5a69]">
-      <AlertCircle className="size-4 shrink-0 text-[#ef2334] dark:text-[#ff3b4f]" />
+    <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-kw-c-ef2334 dark:text-kw-c-ff5a69">
+      <AlertCircle className="size-4 shrink-0 text-kw-c-ef2334 dark:text-kw-c-ff3b4f" />
       <span>{children}</span>
     </p>
   );
@@ -518,8 +518,8 @@ function InlineError({ children }: { children: ReactNode }) {
 
 function FormError({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-[#ef2334]/25 bg-[#ef2334]/10 px-3 py-2 text-sm font-semibold text-[#ef2334] dark:border-[#ff3b4f]/45 dark:bg-[#3a1e2a] dark:text-[#f3f6fa]">
-      <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#ef2334] dark:text-[#ff5a69]" />
+    <div className="flex items-start gap-2 rounded-md border border-kw-c-ef2334/25 bg-kw-c-ef2334/10 px-3 py-2 text-sm font-semibold text-kw-c-ef2334 dark:border-kw-c-ff3b4f/45 dark:bg-kw-c-3a1e2a dark:text-kw-c-f3f6fa">
+      <AlertCircle className="mt-0.5 size-4 shrink-0 text-kw-c-ef2334 dark:text-kw-c-ff5a69" />
       <span>{children}</span>
     </div>
   );
@@ -536,7 +536,7 @@ function SaveBranchButton({
   return (
     <Button
       disabled={disabled || pending}
-      className="h-11 min-w-36 bg-[#15803d] font-bold text-white transition-colors hover:bg-[#166534] dark:bg-[#22c55e] dark:text-[#052e16] dark:hover:bg-[#4ade80]"
+      className="h-11 min-w-36 bg-kw-c-15803d font-bold text-white transition-colors hover:bg-kw-c-166534 dark:bg-kw-c-22c55e dark:text-kw-c-052e16 dark:hover:bg-kw-c-4ade80"
       type="submit"
     >
       {pending ? labels.saving : labels.save}
@@ -570,7 +570,7 @@ function BranchCards({
         )}
       >
         <div className="text-center">
-          <h1 className="text-[clamp(30px,2.8vw,44px)] font-black leading-tight tracking-tight text-[#0a284b] dark:text-[#f3f6fa]">
+          <h1 className="text-owner-branch-title font-black leading-tight tracking-tight text-kw-c-0a284b dark:text-kw-c-f3f6fa">
             {labels.branchesDescription}
           </h1>
         </div>
@@ -583,7 +583,7 @@ function BranchCards({
                 className="flex w-full max-w-[420px] flex-col items-center gap-[10px]"
                 key={branch.id}
               >
-                <Card className="group h-[420px] w-full gap-0 overflow-hidden rounded-lg border border-[#e1e8f2] bg-white/80 py-0 shadow-[0_18px_55px_rgba(10,40,75,0.12)] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-[0_22px_65px_rgba(10,40,75,0.18)] dark:border-[#3a4658] dark:bg-[linear-gradient(180deg,#1e2a39_0%,#182331_100%)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.28)] dark:hover:border-[#4a5a70] dark:hover:bg-[linear-gradient(180deg,#223044_0%,#1b2635_100%)]">
+                <Card className="group h-[420px] w-full gap-0 overflow-hidden rounded-lg border border-kw-c-e1e8f2 bg-white/80 py-0 shadow-kw-card backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/95 shadow-kw-card-hover dark:border-kw-c-3a4658 kw-dark-card-gradient kw-dark-shadow-card dark:hover:border-kw-c-4a5a70 kw-dark-card-gradient-hover">
                   <CardContent className="flex h-full flex-col items-center p-7 text-center">
                     <Link
                       className="flex w-full cursor-pointer flex-col items-center"
@@ -593,11 +593,11 @@ function BranchCards({
                         name={branch.name}
                         src={branch.photo_url ?? branchPhotos[branch.id]}
                       />
-                      <h2 className="mt-7 line-clamp-1 max-w-full text-center text-2xl font-black leading-tight text-[#0a284b] dark:text-[#f3f6fa]">
+                      <h2 className="mt-7 line-clamp-1 max-w-full text-center text-2xl font-black leading-tight text-kw-c-0a284b dark:text-kw-c-f3f6fa">
                         {branchTitle(branch.name, labels.branchCardSuffix)}
                       </h2>
-                      <div className="mt-3 flex min-h-12 w-full items-start justify-center gap-2 text-sm font-semibold leading-6 text-[#687386] dark:text-[#a7b0bf]">
-                        <MapPin className="mt-1 size-4 shrink-0 text-[#ef2334] dark:text-[#ff3b4f]" />
+                      <div className="mt-3 flex min-h-12 w-full items-start justify-center gap-2 text-sm font-semibold leading-6 text-kw-c-687386 dark:text-kw-c-a7b0bf">
+                        <MapPin className="mt-1 size-4 shrink-0 text-kw-c-ef2334 dark:text-kw-c-ff3b4f" />
                         <span className="line-clamp-2 text-left">
                           {branch.address || "-"}
                         </span>
@@ -629,11 +629,11 @@ function BranchCards({
           <div className="flex w-full max-w-[420px] flex-col items-center gap-[10px]">
             <button
               aria-label={labels.addBranch}
-              className="group/add flex h-[420px] w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-transparent bg-white/45 text-[#0a284b] shadow-[0_18px_55px_rgba(10,40,75,0.08)] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-[0_22px_65px_rgba(10,40,75,0.14)] dark:border-[#3a4658]/70 dark:bg-[#1b2635]/70 dark:text-[#f3f6fa] dark:shadow-[0_20px_50px_rgba(0,0,0,0.18)] dark:hover:border-[#4a5a70] dark:hover:bg-[#202d3e]"
+              className="group/add flex h-[420px] w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-transparent bg-white/45 text-kw-c-0a284b shadow-kw-panel-soft backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/75 shadow-kw-soft-hover dark:border-kw-c-3a4658/70 dark:bg-kw-c-1b2635/70 dark:text-kw-c-f3f6fa kw-dark-shadow-soft dark:hover:border-kw-c-4a5a70 dark:hover:bg-kw-c-202d3e"
               type="button"
               onClick={onAddBranch}
             >
-              <span className="flex size-20 items-center justify-center rounded-full bg-[#ef2334]/[0.08] text-[#0a284b] transition duration-300 group-hover/add:scale-110 group-hover/add:bg-[#ef2334]/[0.14] dark:bg-[#3a1e2a] dark:text-[#f3f6fa] dark:group-hover/add:bg-[#ff3b4f]/[0.14]">
+              <span className="flex size-20 items-center justify-center rounded-full bg-kw-c-ef2334/[0.08] text-kw-c-0a284b transition duration-300 group-hover/add:scale-110 group-hover/add:bg-kw-c-ef2334/[0.14] dark:bg-kw-c-3a1e2a dark:text-kw-c-f3f6fa dark:group-hover/add:bg-kw-c-ff3b4f/[0.14]">
                 <Plus className="size-12 stroke-[2.4] transition duration-300 group-hover/add:rotate-90 group-hover/add:scale-110" />
               </span>
             </button>
@@ -647,17 +647,14 @@ function BranchCards({
 function BranchPhoto({ name, src }: { name: string; src?: string }) {
   if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        alt=""
-        className="size-28 rounded-full object-cover shadow-md ring-4 ring-[#f1f4f8] dark:border dark:border-[#414d60] dark:ring-[#414d60]/40"
-        src={src}
-      />
+      <span className="relative block size-28 overflow-hidden rounded-full shadow-md ring-4 ring-kw-c-f1f4f8 dark:border dark:border-kw-c-414d60 dark:ring-kw-c-414d60/40">
+        <ObjectCoverImage alt={name} src={src} />
+      </span>
     );
   }
 
   return (
-    <div className="flex size-28 items-center justify-center rounded-full bg-[#e3e3e8] text-3xl font-black text-[#0a284b] shadow-inner ring-4 ring-[#f1f4f8] dark:border dark:border-[#414d60] dark:bg-[radial-gradient(circle_at_top,#354154_0%,#263141_100%)] dark:text-[#f3f6fa] dark:ring-[#414d60]/40">
+    <div className="flex size-28 items-center justify-center rounded-full bg-kw-c-e3e3e8 text-3xl font-black text-kw-c-0a284b shadow-inner ring-4 ring-kw-c-f1f4f8 dark:border dark:border-kw-c-414d60 kw-dark-avatar-gradient dark:text-kw-c-f3f6fa dark:ring-kw-c-414d60/40">
       {initials(name)}
     </div>
   );
@@ -699,10 +696,10 @@ function BranchQuickActions({
           href={action.href}
           key={action.href}
         >
-          <span className="flex size-11 items-center justify-center rounded-full border border-[#ef2334]/15 bg-[#ef2334]/[0.07] text-[#0a284b] transition duration-300 group-hover/action:-translate-y-0.5 group-hover/action:border-[#ef2334]/30 group-hover/action:bg-[#ef2334]/[0.14] group-hover/action:text-[#ef2334] dark:border-[#3b4658] dark:bg-[#202b3a] dark:text-[#e7ecf3] dark:group-hover/action:border-[#54657c] dark:group-hover/action:bg-[#263448] dark:group-hover/action:text-white">
+          <span className="flex size-11 items-center justify-center rounded-full border border-kw-c-ef2334/15 bg-kw-c-ef2334/[0.07] text-kw-c-0a284b transition duration-300 group-hover/action:-translate-y-0.5 group-hover/action:border-kw-c-ef2334/30 group-hover/action:bg-kw-c-ef2334/[0.14] group-hover/action:text-kw-c-ef2334 dark:border-kw-c-3b4658 dark:bg-kw-c-202b3a dark:text-kw-c-e7ecf3 dark:group-hover/action:border-kw-c-54657c dark:group-hover/action:bg-kw-c-263448 dark:group-hover/action:text-white">
             {action.icon}
           </span>
-          <span className="h-4 translate-y-1 text-center text-[11px] font-black leading-none text-[#0a284b] opacity-0 transition duration-300 group-hover/action:translate-y-0 group-hover/action:opacity-100 dark:text-[#a7b0bf]">
+          <span className="h-4 translate-y-1 text-center text-kw-11 font-black leading-none text-kw-c-0a284b opacity-0 transition duration-300 group-hover/action:translate-y-0 group-hover/action:opacity-100 dark:text-kw-c-a7b0bf">
             {action.label}
           </span>
         </Link>
@@ -721,7 +718,7 @@ function BranchStatBadge({
   value: number;
 }) {
   return (
-    <Badge className="h-9 rounded-full border border-[#ef2334]/15 bg-[#ef2334]/[0.08] px-3 text-sm font-black text-[#0a284b] shadow-none dark:border-[#ff3b4f]/35 dark:bg-[#ff3b4f]/[0.08] dark:text-[#f0f3f8] dark:[&_svg]:text-[#ff3b4f]">
+    <Badge className="h-9 rounded-full border border-kw-c-ef2334/15 bg-kw-c-ef2334/[0.08] px-3 text-sm font-black text-kw-c-0a284b shadow-none dark:border-kw-c-ff3b4f/35 dark:bg-kw-c-ff3b4f/[0.08] dark:text-kw-c-f0f3f8 dark:[&_svg]:text-kw-c-ff3b4f">
       {icon}
       <span>
         {value} {label}

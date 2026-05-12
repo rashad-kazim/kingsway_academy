@@ -43,9 +43,10 @@ export async function deleteTeacherAction(
   if (!token) {
     return { error: "unauthorized" };
   }
+  const idempotencyKey = stringField(formData, "idempotency_key") || undefined;
 
   try {
-    const teacher = await deleteTeacher(teacherID, token);
+    const teacher = await deleteTeacher(teacherID, token, idempotencyKey);
     return { teacher };
   } catch (error) {
     if (error instanceof ApiError) {
@@ -142,24 +143,30 @@ export async function createTeacherAction(
     );
 
     if (photo instanceof File && photo.size > 0) {
-      const uploaded = await uploadTeacherPhoto(
-        result.teacher.branch_id,
-        result.teacher.id,
-        photo,
-        token,
-      );
-      await updateTeacher(
-        result.teacher.id,
-        {
-          birth_date: result.teacher.birth_date,
-          gender: result.teacher.gender,
-          phone: result.teacher.phone,
-          address: result.teacher.address,
-          profile_photo_file_id: uploaded.id,
-          subjects,
-        },
-        token,
-      );
+      try {
+        const uploaded = await uploadTeacherPhoto(
+          result.teacher.branch_id,
+          result.teacher.id,
+          photo,
+          token,
+        );
+        await updateTeacher(
+          result.teacher.id,
+          {
+            birth_date: result.teacher.birth_date,
+            gender: result.teacher.gender,
+            phone: result.teacher.phone,
+            address: result.teacher.address,
+            profile_photo_file_id: uploaded.id,
+            subjects,
+          },
+          token,
+          idempotencyKey ? `${idempotencyKey}:photo-update` : undefined,
+        );
+      } catch {
+        // Teacher creation is already committed. Keep the flow successful if
+        // the optional profile photo write fails temporarily.
+      }
     }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -266,6 +273,7 @@ export async function updateTeacherAction(
         subjects,
       },
       token,
+      idempotencyKey ? `${idempotencyKey}:teacher-update` : undefined,
     );
 
     await createSalaryModel(

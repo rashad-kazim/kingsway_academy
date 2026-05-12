@@ -194,13 +194,13 @@ export function TeacherFinanceHrView({
       <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">{labels.title}</h1>
-          <p className="mt-1 text-sm text-[#59667a] dark:text-[#a7b0bf]">
+          <p className="mt-1 text-sm text-kw-c-59667a dark:text-kw-c-a7b0bf">
             {labels.description}
           </p>
         </div>
         <Button
           asChild
-          className="h-[38px] gap-2 rounded-lg bg-[#ef2334] px-5 font-bold text-white shadow-[0_12px_26px_rgba(239,35,52,0.28)] transition hover:bg-[#d91f30] dark:bg-[#ff3b4f] dark:hover:bg-[#ff5a69]"
+          className="h-[38px] gap-2 rounded-lg bg-kw-c-ef2334 px-5 font-bold text-white shadow-kw-action transition hover:bg-kw-c-d91f30 dark:bg-kw-c-ff3b4f dark:hover:bg-kw-c-ff5a69"
         >
           <Link href={`/${locale}/dashboard/owner?view=teacher-add`}>
             <Plus className="size-4" />
@@ -209,7 +209,7 @@ export function TeacherFinanceHrView({
         </Button>
       </section>
 
-      <Card className="rounded-xl border-white/55 bg-white/65 shadow-[0_24px_70px_rgba(10,40,75,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1b2635]/62 dark:shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+      <Card className="rounded-xl border-white/55 bg-white/65 shadow-kw-panel backdrop-blur-xl dark:border-white/10 dark:bg-kw-c-1b2635/62 kw-dark-shadow-panel">
         <CardContent className="p-4">
           <div className="grid gap-3 md:grid-cols-[repeat(4,minmax(0,1fr))_auto] md:items-end">
             <FilterSelect
@@ -274,7 +274,7 @@ export function TeacherFinanceHrView({
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {activeFilters.map((filter) => (
                 <button
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#dce3ee] bg-white px-3 py-1.5 text-xs font-black text-[#0a284b] shadow-sm transition hover:border-[#ef2334] hover:text-[#ef2334] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:text-[#ff5a69]"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-kw-c-dce3ee bg-white px-3 py-1.5 text-xs font-black text-kw-c-0a284b shadow-sm transition hover:border-kw-c-ef2334 hover:text-kw-c-ef2334 dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa dark:hover:border-kw-c-ff3b4f dark:hover:text-kw-c-ff5a69"
                   key={filter.key}
                   title={labels.removeFilter}
                   type="button"
@@ -289,11 +289,11 @@ export function TeacherFinanceHrView({
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden rounded-xl border-white/55 bg-white/65 py-0 shadow-[0_24px_70px_rgba(10,40,75,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1b2635]/62 dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+      <Card className="overflow-hidden rounded-xl border-white/55 bg-white/65 py-0 shadow-kw-panel-strong backdrop-blur-xl dark:border-white/10 dark:bg-kw-c-1b2635/62 kw-dark-shadow-panel-strong">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="h-14 border-white/40 bg-[#eef3f8] hover:bg-[#eef3f8] dark:border-white/10 dark:bg-[#202b3a] dark:hover:bg-[#202b3a]">
+              <TableRow className="h-14 border-white/40 bg-kw-c-eef3f8 hover:bg-kw-c-eef3f8 dark:border-white/10 dark:bg-kw-c-202b3a dark:hover:bg-kw-c-202b3a">
                 <TableHead className="px-5 py-4">{labels.profile}</TableHead>
                 <TableHead>{labels.branch}</TableHead>
                 <TableHead>{labels.subject}</TableHead>
@@ -310,17 +310,17 @@ export function TeacherFinanceHrView({
               {visibleRecords.length > 0 ? (
                 visibleRecords.map((record) => (
                   <TableRow
-                    className="border-white/35 hover:bg-white/35 dark:border-white/10 dark:hover:bg-[#202b3a]/50"
+                    className="border-white/35 hover:bg-white/35 dark:border-white/10 dark:hover:bg-kw-c-202b3a/50"
                     key={record.id}
                   >
                     <TableCell className="px-5 py-5">
                       <div className="flex items-center gap-3">
-                        <Avatar className="size-11 border border-white/50 shadow-sm dark:border-[#414d60]">
+                        <Avatar className="size-11 border border-white/50 shadow-sm dark:border-kw-c-414d60">
                           <AvatarImage
                             alt={teacherFullName(record)}
                             src={record.profile_photo_url}
                           />
-                          <AvatarFallback className="bg-[#e8edf5] text-sm font-black text-[#0a284b] dark:bg-[#2a3444] dark:text-[#f3f6fa]">
+                          <AvatarFallback className="bg-kw-c-e8edf5 text-sm font-black text-kw-c-0a284b dark:bg-kw-c-2a3444 dark:text-kw-c-f3f6fa">
                             {teacherInitials(record)}
                           </AvatarFallback>
                         </Avatar>
@@ -328,7 +328,7 @@ export function TeacherFinanceHrView({
                           <div className="truncate font-bold">
                             {teacherFullName(record)}
                           </div>
-                          <div className="mt-1 text-xs text-[#687386] dark:text-[#6f7a8a]">
+                          <div className="mt-1 text-xs text-kw-c-687386 dark:text-kw-c-6f7a8a">
                             {record.email}
                           </div>
                         </div>
@@ -338,7 +338,7 @@ export function TeacherFinanceHrView({
                       {record.branch_name}
                     </TableCell>
                     <TableCell className="py-5">
-                      <span className="text-[#59667a] dark:text-[#a7b0bf]">
+                      <span className="text-kw-c-59667a dark:text-kw-c-a7b0bf">
                         {record.subject || labels.unassigned}
                       </span>
                     </TableCell>
@@ -349,14 +349,14 @@ export function TeacherFinanceHrView({
                       {record.salary_type ? (
                         labels.salaryTypes[record.salary_type]
                       ) : (
-                        <span className="text-[#687386] dark:text-[#6f7a8a]">
+                        <span className="text-kw-c-687386 dark:text-kw-c-6f7a8a">
                           {labels.unassigned}
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="py-5">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[#ef2334]/25 bg-[#ef2334]/8 px-3 py-1 text-sm font-black text-[#0a284b] dark:border-[#ff3b4f]/35 dark:bg-[#ff3b4f]/10 dark:text-[#f3f6fa]">
-                        <Users className="size-4 text-[#ef2334] dark:text-[#ff3b4f]" />
+                      <div className="inline-flex items-center gap-2 rounded-full border border-kw-c-ef2334/25 bg-kw-c-ef2334/8 px-3 py-1 text-sm font-black text-kw-c-0a284b dark:border-kw-c-ff3b4f/35 dark:bg-kw-c-ff3b4f/10 dark:text-kw-c-f3f6fa">
+                        <Users className="size-4 text-kw-c-ef2334 dark:text-kw-c-ff3b4f" />
                         {record.assigned_students}
                       </div>
                     </TableCell>
@@ -391,7 +391,7 @@ export function TeacherFinanceHrView({
               ) : (
                 <TableRow>
                   <TableCell colSpan={8}>
-                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center text-[#687386] dark:text-[#6f7a8a]">
+                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center text-kw-c-687386 dark:text-kw-c-6f7a8a">
                       <Search className="size-8" />
                       <div className="font-bold">{labels.noTeachers}</div>
                     </div>
@@ -419,11 +419,11 @@ function FilterSelect({
 }) {
   return (
     <label className="space-y-2">
-      <span className="text-xs font-black uppercase tracking-[0.08em] text-[#687386] dark:text-[#a7b0bf]">
+      <span className="text-xs font-black uppercase tracking-[0.08em] text-kw-c-687386 dark:text-kw-c-a7b0bf">
         {label}
       </span>
       <select
-        className="h-11 w-full cursor-pointer rounded-lg border border-[#dce3ee] bg-white px-3 text-sm font-semibold text-[#0a284b] outline-none transition focus:border-[#ef2334] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:focus:border-[#ff3b4f]"
+        className="h-11 w-full cursor-pointer rounded-lg border border-kw-c-dce3ee bg-white px-3 text-sm font-semibold text-kw-c-0a284b outline-none transition focus:border-kw-c-ef2334 dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a dark:text-kw-c-f3f6fa dark:focus:border-kw-c-ff3b4f"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -445,7 +445,7 @@ function StatusBadge({
       ? "bg-emerald-600 text-white hover:bg-emerald-600"
       : status === "pending_owner_approval"
         ? "bg-amber-500 text-white hover:bg-amber-500"
-        : "bg-[#64748b] text-white hover:bg-[#64748b]";
+        : "bg-kw-c-64748b text-white hover:bg-kw-c-64748b";
 
   return <Badge className={className}>{labels.statuses[status]}</Badge>;
 }
@@ -463,6 +463,9 @@ function TeacherDeleteDialog({
   const [confirmName, setConfirmName] = useState("");
   const [confirmStep, setConfirmStep] = useState<"name" | "impact">("name");
   const [hasSubmittedDelete, setHasSubmittedDelete] = useState(false);
+  const [deleteIdempotencyKey, setDeleteIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
   const [state, formAction] = useActionState(
     deleteTeacherAction,
     initialDeleteState,
@@ -477,6 +480,7 @@ function TeacherDeleteDialog({
     }
     window.queueMicrotask(() => {
       onDeleted(state.teacher as Teacher);
+      setDeleteIdempotencyKey(crypto.randomUUID());
       setOpen(false);
       setConfirmName("");
       setConfirmStep("name");
@@ -497,7 +501,7 @@ function TeacherDeleteDialog({
     <>
       <Button
         aria-label={labels.delete}
-        className="cursor-pointer text-[#ef2334] hover:text-[#ef2334] dark:text-[#ff3b4f] dark:hover:text-[#ff3b4f]"
+        className="cursor-pointer text-kw-c-ef2334 hover:text-kw-c-ef2334 dark:text-kw-c-ff3b4f dark:hover:text-kw-c-ff3b4f"
         size="icon"
         type="button"
         variant="ghost"
@@ -506,7 +510,7 @@ function TeacherDeleteDialog({
         <Trash2 className="size-4" />
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="z-[1200] border-[#dce3ee] dark:border-[#3a4658] dark:bg-[#1b2635] dark:text-[#f3f6fa]">
+        <DialogContent className="z-[1200] border-kw-c-dce3ee dark:border-kw-c-3a4658 dark:bg-kw-c-1b2635 dark:text-kw-c-f3f6fa">
           {blocked ? (
             <>
               <DialogHeader>
@@ -529,9 +533,14 @@ function TeacherDeleteDialog({
               onSubmit={() => setHasSubmittedDelete(true)}
             >
               <input name="teacher_id" type="hidden" value={record.id} />
+              <input
+                name="idempotency_key"
+                type="hidden"
+                value={deleteIdempotencyKey}
+              />
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-xl font-black">
-                  <AlertTriangle className="size-5 text-[#ef2334] dark:text-[#ff5a69]" />
+                  <AlertTriangle className="size-5 text-kw-c-ef2334 dark:text-kw-c-ff5a69" />
                   {labels.deleteTeacherImpactTitle}
                 </DialogTitle>
                 <DialogDescription>
@@ -582,7 +591,7 @@ function TeacherDeleteDialog({
                   onChange={(event) => setConfirmName(event.target.value)}
                 />
                 {confirmName && !nameMatches ? (
-                  <p className="text-sm font-semibold text-[#ef2334] dark:text-[#ff6b7a]">
+                  <p className="text-sm font-semibold text-kw-c-ef2334 dark:text-kw-c-ff6b7a">
                   {labels.confirmNameMismatch}
                 </p>
               ) : null}
@@ -596,7 +605,7 @@ function TeacherDeleteDialog({
                   {labels.cancel}
                 </Button>
                 <Button
-                  className="bg-[#8f1020] text-white hover:bg-[#74101d]"
+                  className="bg-kw-c-8f1020 text-white hover:bg-kw-c-74101d"
                   disabled={!nameMatches}
                   type="button"
                   onClick={() => setConfirmStep("impact")}
@@ -625,7 +634,7 @@ function DeleteTeacherSubmit({
 
   return (
     <Button
-      className="bg-[#8f1020] text-white hover:bg-[#74101d]"
+      className="bg-kw-c-8f1020 text-white hover:bg-kw-c-74101d"
       disabled={disabled || status.pending}
       type="submit"
     >
@@ -663,7 +672,7 @@ function DeleteTeacherError({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-[#f87171] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#991b1b] dark:bg-[#3b1218] dark:text-[#ffe4e6]">
+    <div className="mt-4 rounded-lg border border-kw-c-f87171 bg-kw-c-fff1f2 px-4 py-3 text-sm font-semibold text-kw-c-991b1b dark:bg-kw-c-3b1218 dark:text-kw-c-ffe4e6">
       {message}
     </div>
   );

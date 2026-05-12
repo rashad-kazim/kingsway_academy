@@ -244,14 +244,14 @@ export function AppShell({
   }
 
   return (
-    <div className="h-svh overflow-hidden bg-[#f7f8fb] text-[#0a284b] transition-colors dark:bg-[#0b1622] dark:text-[#f3f6fa]">
-      <header className="fixed inset-x-0 top-0 z-[1000] flex h-20 items-center justify-between border-b border-transparent bg-[#0a284b] px-6 text-white shadow-sm dark:border-[#293445] dark:bg-[#121f2d] dark:text-[#f3f6fa]">
+    <div className="h-svh overflow-hidden bg-kw-c-f7f8fb text-kw-c-0a284b transition-colors dark:bg-kw-c-0b1622 dark:text-kw-c-f3f6fa">
+      <header className="fixed inset-x-0 top-0 z-[1000] flex h-20 items-center justify-between border-b border-transparent bg-kw-c-0a284b px-6 text-white shadow-sm dark:border-kw-c-293445 dark:bg-kw-c-121f2d dark:text-kw-c-f3f6fa">
         <div className="flex w-72 items-center gap-3">
           <Button
             aria-label={
               sidebarOpen ? labels.shell.closeSidebar : labels.shell.openSidebar
             }
-            className="relative h-9 w-11 overflow-hidden rounded-md text-white hover:bg-white/10 hover:text-white dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]"
+            className="relative h-9 w-11 overflow-hidden rounded-md text-white hover:bg-white/10 hover:text-white dark:text-kw-c-f3f6fa dark:hover:bg-kw-c-202d3e"
             size="icon"
             type="button"
             variant="ghost"
@@ -262,7 +262,7 @@ export function AppShell({
         </div>
 
         <Link
-          className="absolute left-1/2 flex -translate-x-1/2 cursor-pointer items-center gap-3 text-white dark:text-[#f3f6fa]"
+          className="absolute left-1/2 flex -translate-x-1/2 cursor-pointer items-center gap-3 text-white dark:text-kw-c-f3f6fa"
           href={homeHref}
         >
           <Image
@@ -272,13 +272,13 @@ export function AppShell({
             height={499}
             priority
             unoptimized={process.env.NODE_ENV === "development"}
-            className="size-12 object-contain drop-shadow-[0_1px_3px_rgba(255,255,255,0.35)]"
+            className="size-12 object-contain drop-shadow-kw-logo"
           />
           <div className="leading-[0.92]">
-            <div className="text-[18px] font-black uppercase tracking-[0.14em] text-white">
+            <div className="text-kw-18 font-black uppercase tracking-[0.14em] text-white">
               {labels.common.brand}
             </div>
-            <div className="mt-1 text-[12px] font-black uppercase tracking-[0.36em] text-[#ff3b4f]">
+            <div className="mt-1 text-kw-12 font-black uppercase tracking-[0.36em] text-kw-c-ff3b4f">
               {labels.common.academy}
             </div>
           </div>
@@ -293,7 +293,7 @@ export function AppShell({
 
       <aside
         className={cn(
-          "fixed bottom-0 left-0 top-0 z-[999] border-r border-[#dce3ee] bg-[#0a284b] pt-20 text-white transition-all duration-300 ease-in-out dark:border-[#293445] dark:bg-[#121f2d] dark:text-[#f3f6fa]",
+          "fixed bottom-0 left-0 top-0 z-[999] border-r border-kw-c-dce3ee bg-kw-c-0a284b pt-20 text-white transition-all duration-300 ease-in-out dark:border-kw-c-293445 dark:bg-kw-c-121f2d dark:text-kw-c-f3f6fa",
           sidebarOpen ? "w-80" : "w-20",
         )}
       >
@@ -337,7 +337,7 @@ export function AppShell({
               );
             })}
           </nav>
-          <div className="border-t border-white/10 p-3 dark:border-[#293445]">
+          <div className="border-t border-white/10 p-3 dark:border-kw-c-293445">
             <ProfileMenu
               labels={labels.common}
               locale={locale}
@@ -361,8 +361,8 @@ export function AppShell({
             <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
               {children}
             </main>
-            <footer className="w-full border-t border-[#dce3ee] bg-white/55 px-6 py-4 dark:border-[#293445] dark:bg-[#121f2d]/55">
-              <div className="flex w-full flex-wrap items-center justify-between gap-3 text-xs text-[#687386] dark:text-[#6f7a8a]">
+            <footer className="w-full border-t border-kw-c-dce3ee bg-white/55 px-6 py-4 dark:border-kw-c-293445 dark:bg-kw-c-121f2d/55">
+              <div className="flex w-full flex-wrap items-center justify-between gap-3 text-xs text-kw-c-687386 dark:text-kw-c-6f7a8a">
                 <span className="font-semibold">{labels.shell.footer}</span>
                 <span>&copy; 2026 Kingsway Academy. Internal operation system.</span>
               </div>
@@ -421,9 +421,9 @@ function SidebarLink({
   const content = (
     <Link
       className={cn(
-        "relative flex h-12 cursor-pointer items-center gap-3 overflow-hidden rounded-md px-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/10 hover:text-white dark:text-[#f3f6fa] dark:hover:bg-[#202d3e]",
+        "relative flex h-12 cursor-pointer items-center gap-3 overflow-hidden rounded-md px-3 text-kw-15 font-semibold text-white transition-colors hover:bg-white/10 hover:text-white dark:text-kw-c-f3f6fa dark:hover:bg-kw-c-202d3e",
         active &&
-          "bg-[#306186] text-white before:absolute before:left-0 before:top-2 before:h-8 before:w-1 before:rounded-r-full before:bg-[#ff3b4f] dark:bg-[#306186]",
+          "bg-kw-c-306186 text-white before:absolute before:left-0 before:top-2 before:h-8 before:w-1 before:rounded-r-full before:bg-kw-c-ff3b4f dark:bg-kw-c-306186",
       )}
       href={href}
     >

@@ -2,17 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useFormStatus } from "react-dom";
-import {
-  CheckCircle2,
-  ChevronDown,
-  Eye,
-  EyeOff,
-  ImagePlus,
-  Save,
-  X,
-  XCircle,
-} from "lucide-react";
+import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  EmailAvailabilityIcon,
+  EmailAvailabilityText,
+  type EmailAvailabilityStatus,
+} from "@/components/owner/shared/email-availability";
+import { LockedSubmitButton } from "@/components/owner/shared/locked-submit-button";
+import { PhotoUploadAvatar } from "@/components/owner/shared/photo-upload-avatar";
 import type { Branch, SalaryModelType } from "@/lib/api/types";
 import {
   checkTeacherEmailAvailabilityAction,
@@ -30,7 +27,6 @@ import {
   type CreateTeacherState,
   updateTeacherAction,
 } from "@/lib/teacher-finance/actions";
-import { useSubmitLock } from "@/lib/forms/use-submit-lock";
 
 export type AddTeacherFormLabels = {
   addTeacher: string;
@@ -138,9 +134,9 @@ export function AddTeacherForm({
   const [email, setEmail] = useState(initialTeacher?.email ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<
-    "idle" | "checking" | "available" | "taken" | "invalid"
-  >(editing ? "available" : "idle");
+  const [emailStatus, setEmailStatus] = useState<EmailAvailabilityStatus>(
+    editing ? "available" : "idle",
+  );
   const subjectOptions = useMemo(
     () => [
       ...new Set([...(labels.defaultSubjects ?? []), ...subjects].filter(Boolean)),
@@ -280,47 +276,21 @@ export function AddTeacherForm({
         <h1 className="text-3xl font-black tracking-tight">
           {editing ? labels.edit : labels.addTeacher}
         </h1>
-        <p className="mt-2 text-sm text-[#59667a] dark:text-[#a7b0bf]">
+        <p className="mt-2 text-sm text-kw-c-59667a dark:text-kw-c-a7b0bf">
           {labels.addTeacherDescription}
         </p>
       </section>
 
-      <section className="rounded-2xl border border-white/55 bg-white/70 p-7 shadow-[0_24px_70px_rgba(10,40,75,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-[#1b2635]/70">
+      <section className="rounded-2xl border border-white/55 bg-white/70 p-7 shadow-kw-panel backdrop-blur-xl dark:border-white/10 dark:bg-kw-c-1b2635/70">
         <div className="flex justify-center">
-          <div className="relative size-36">
-            <label className="group flex size-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-[#b9c5d6] bg-[#f7f8fb] text-[#0a284b] shadow-inner transition hover:border-[#ef2334] hover:bg-[#f1f4f8] dark:border-[#3a4658] dark:bg-[#202b3a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f] dark:hover:bg-[#263448]">
-              {photoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt=""
-                  className="size-full object-cover"
-                  src={photoPreview}
-                />
-              ) : (
-                <ImagePlus className="size-8 transition-transform group-hover:scale-110" />
-              )}
-              <input
-                ref={fileInputRef}
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                className="sr-only"
-                name="profile_photo"
-                onChange={(event) =>
-                  handlePhotoChange(event.currentTarget.files?.[0] ?? null)
-                }
-                type="file"
-              />
-            </label>
-            {photoPreview ? (
-              <button
-                aria-label={labels.removePhoto}
-                className="absolute right-0 top-0 grid size-8 cursor-pointer place-items-center rounded-full bg-[#ef2334] text-white shadow-lg ring-4 ring-white transition hover:bg-[#d91f30] dark:bg-[#ff3b4f] dark:ring-[#1b2635] dark:hover:bg-[#ff5a69]"
-                type="button"
-                onClick={clearPhoto}
-              >
-                <X className="size-4" />
-              </button>
-            ) : null}
-          </div>
+          <PhotoUploadAvatar
+            inputRef={fileInputRef}
+            name="profile_photo"
+            onChange={handlePhotoChange}
+            onClear={clearPhoto}
+            previewURL={photoPreview}
+            removeLabel={labels.removePhoto}
+          />
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -453,9 +423,9 @@ export function AddTeacherForm({
                 type="email"
                 value={email}
               />
-              <EmailStatusIcon status={emailStatus} />
+              <EmailAvailabilityIcon status={emailStatus} />
             </div>
-            <EmailStatusText labels={labels} status={emailStatus} />
+            <EmailAvailabilityText labels={labels} status={emailStatus} />
           </Field>
           <Field label={labels.password} required={!editing}>
             <div className="relative">
@@ -467,7 +437,7 @@ export function AddTeacherForm({
                 value={password}
               />
               <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-[#687386] transition hover:text-[#0a284b] dark:text-[#a7b0bf] dark:hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-kw-c-687386 transition hover:text-kw-c-0a284b dark:text-kw-c-a7b0bf dark:hover:text-white"
                 onClick={() => setShowPassword((current) => !current)}
                 type="button"
               >
@@ -488,7 +458,7 @@ export function AddTeacherForm({
           >
             {labels.cancel}
           </Button>
-          <SubmitButton
+          <LockedSubmitButton
             disabled={!canSubmit}
             label={labels.save}
             pending={labels.saving}
@@ -512,7 +482,7 @@ function Field({
     <div className="space-y-2">
       <Label className="font-black">
         {label}
-        {required ? <span className="text-[#ef2334] dark:text-[#ff3b4f]"> *</span> : null}
+        {required ? <span className="text-kw-c-ef2334 dark:text-kw-c-ff3b4f"> *</span> : null}
       </Label>
       {children}
     </div>
@@ -534,24 +504,24 @@ function SubjectMultiSelect({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-input bg-background px-3 text-left text-sm font-semibold outline-none transition hover:border-[#ef2334] focus:border-[#ef2334] dark:hover:border-[#ff3b4f] dark:focus:border-[#ff3b4f]"
+          className="flex h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-input bg-background px-3 text-left text-sm font-semibold outline-none transition hover:border-kw-c-ef2334 focus:border-kw-c-ef2334 dark:hover:border-kw-c-ff3b4f dark:focus:border-kw-c-ff3b4f"
           type="button"
         >
           <span
             className={`truncate ${
               selected.length > 0
-                ? "text-[#0a284b] dark:text-[#f3f6fa]"
-                : "text-[#687386] dark:text-[#a7b0bf]"
+                ? "text-kw-c-0a284b dark:text-kw-c-f3f6fa"
+                : "text-kw-c-687386 dark:text-kw-c-a7b0bf"
             }`}
           >
             {selected.length > 0
               ? selected.join(", ")
               : labels.subjectDropdownPlaceholder}
           </span>
-          <ChevronDown className="size-4 shrink-0 text-[#687386] dark:text-[#a7b0bf]" />
+          <ChevronDown className="size-4 shrink-0 text-kw-c-687386 dark:text-kw-c-a7b0bf" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="z-[1200] border-[#dce3ee] dark:border-[#3a4658] dark:bg-[#1b2635]">
+      <DropdownMenuContent className="z-[1200] border-kw-c-dce3ee dark:border-kw-c-3a4658 dark:bg-kw-c-1b2635">
         {subjects.map((subject) => (
           <DropdownMenuCheckboxItem
             checked={selected.includes(subject)}
@@ -565,85 +535,6 @@ function SubjectMultiSelect({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function SubmitButton({
-  disabled,
-  label,
-  pending,
-}: {
-  disabled: boolean;
-  label: string;
-  pending: string;
-}) {
-  const status = useFormStatus();
-  const submitLock = useSubmitLock(status.pending);
-
-  const blocked = disabled || status.pending || submitLock.locked;
-
-  return (
-    <Button
-      className="gap-2 rounded-lg bg-emerald-600 px-7 font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-      disabled={blocked}
-      type="submit"
-      onClick={submitLock.onClick}
-    >
-      <Save className="size-4" />
-      {status.pending ? pending : label}
-    </Button>
-  );
-}
-
-function EmailStatusIcon({
-  status,
-}: {
-  status: "idle" | "checking" | "available" | "taken" | "invalid";
-}) {
-  if (status === "available") {
-    return (
-      <CheckCircle2 className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-emerald-500" />
-    );
-  }
-  if (status === "taken" || status === "invalid") {
-    return (
-      <XCircle className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-[#ef2334] dark:text-[#ff3b4f]" />
-    );
-  }
-
-  return null;
-}
-
-function EmailStatusText({
-  labels,
-  status,
-}: {
-  labels: AddTeacherFormLabels;
-  status: "idle" | "checking" | "available" | "taken" | "invalid";
-}) {
-  const text =
-    status === "checking"
-      ? labels.emailChecking
-      : status === "available"
-        ? labels.emailAvailable
-        : status === "taken"
-          ? labels.emailTaken
-          : "";
-
-  if (!text) {
-    return null;
-  }
-
-  return (
-    <div
-      className={`text-xs font-bold ${
-        status === "available"
-          ? "text-emerald-600"
-          : "text-[#ef2334] dark:text-[#ff3b4f]"
-      }`}
-    >
-      {text}
-    </div>
   );
 }
 
@@ -674,7 +565,7 @@ function CreateTeacherError({
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-[#f87171] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#991b1b] dark:bg-[#3b1218] dark:text-[#ffe4e6]">
+    <div className="mt-6 rounded-lg border border-kw-c-f87171 bg-kw-c-fff1f2 px-4 py-3 text-sm font-semibold text-kw-c-991b1b dark:bg-kw-c-3b1218 dark:text-kw-c-ffe4e6">
       {message}
     </div>
   );

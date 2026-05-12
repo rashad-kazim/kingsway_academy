@@ -124,24 +124,7 @@ export default async function RoleDashboardPage({
   };
 
   if (role === "owner") {
-    const branches = await Promise.all(
-      (await listBranches(token)).map((branch) =>
-        attachBranchPhoto(branch, token),
-      ),
-    );
-    const branchStats = await Promise.all(
-      branches.map(async (branch): Promise<BranchStats> => {
-        const branchDashboard = await getDashboard("owner", token, branch.id);
-        return {
-          branch_id: branch.id,
-          active_students: branchDashboard.summary?.active_students ?? 0,
-          active_teachers: branchDashboard.summary?.active_teachers ?? 0,
-        };
-      }),
-    );
-    const selectedBranch = branchID
-      ? branches.find((branch) => branch.id === branchID)
-      : undefined;
+    const branches = await listBranches(token);
     const branchManagementSelected = view === "branches";
     const addTeacherSelected = view === "teacher-add";
     const editTeacherSelected = view === "teacher-edit" && teacherID;
@@ -151,19 +134,23 @@ export default async function RoleDashboardPage({
     const teacherFinanceSelected = view === "teacher-finance";
 
     if (branchManagementSelected) {
-      const rooms = await listRooms(token);
-      const staff = (
-        await Promise.all(
-          branches.map((branch) => listBranchStaff(branch.id, token)),
-        )
-      ).flat();
+      const [branchesWithPhotos, branchStats, rooms, staffByBranch] =
+        await Promise.all([
+          attachBranchPhotos(branches, token),
+          loadBranchStats(branches, token),
+          listRooms(token),
+          Promise.all(
+            branches.map((branch) => listBranchStaff(branch.id, token)),
+          ),
+        ]);
+      const staff = staffByBranch.flat();
       const staffWithPhotos = await Promise.all(
         staff.map((member) => attachStaffPhoto(member, token)),
       );
       return (
         <AppShell labels={shellLabels} locale={locale} session={session}>
           <BranchManagementView
-            branches={branches}
+            branches={branchesWithPhotos}
             labels={messages.owner.branchManagement}
             rooms={rooms}
             staff={staffWithPhotos}
@@ -293,11 +280,16 @@ export default async function RoleDashboardPage({
       );
     }
 
-    const dashboard = await getDashboard(
-      "owner",
-      token,
-      selectedBranch?.id,
-    );
+    const selectedBranchBase = branchID
+      ? branches.find((branch) => branch.id === branchID)
+      : undefined;
+    const [branchesWithPhotos, dashboard] = await Promise.all([
+      attachBranchPhotos(branches, token),
+      getDashboard("owner", token, selectedBranchBase?.id),
+    ]);
+    const selectedBranch = selectedBranchBase
+      ? branchesWithPhotos.find((branch) => branch.id === selectedBranchBase.id)
+      : undefined;
     return (
       <AppShell
         labels={shellLabels}
@@ -505,6 +497,26 @@ async function attachStudentHubPhoto(
   } catch {
     return student;
   }
+}
+
+function attachBranchPhotos(branches: Branch[], token: string) {
+  return Promise.all(branches.map((branch) => attachBranchPhoto(branch, token)));
+}
+
+function loadBranchStats(
+  branches: Branch[],
+  token: string,
+): Promise<BranchStats[]> {
+  return Promise.all(
+    branches.map(async (branch): Promise<BranchStats> => {
+      const branchDashboard = await getDashboard("owner", token, branch.id);
+      return {
+        branch_id: branch.id,
+        active_students: branchDashboard.summary?.active_students ?? 0,
+        active_teachers: branchDashboard.summary?.active_teachers ?? 0,
+      };
+    }),
+  );
 }
 
 async function attachBranchPhoto(

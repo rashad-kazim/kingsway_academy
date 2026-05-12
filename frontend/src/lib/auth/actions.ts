@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { ApiError, login } from "@/lib/api/client";
+import { ApiError, login, logoutSession } from "@/lib/api/client";
 import type { Role } from "@/lib/api/types";
 import { AUTH_COOKIE } from "@/lib/auth/constants";
 
@@ -69,6 +69,14 @@ export async function loginAction(
 export async function logoutAction(formData: FormData) {
   const locale = String(formData.get("locale") ?? "en");
   const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
+  if (token) {
+    try {
+      await logoutSession(token);
+    } catch {
+      // Local sign-out should still complete if the backend is unavailable.
+    }
+  }
   cookieStore.delete(AUTH_COOKIE);
   redirect(`/${locale}/login`);
 }

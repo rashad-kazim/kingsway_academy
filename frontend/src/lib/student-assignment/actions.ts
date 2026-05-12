@@ -106,7 +106,7 @@ export async function createStudentAction(
     }
   }
 
-  let stage: "student" | "photo" | "account" = "student";
+  let stage: "student" | "account" = "student";
   try {
     const student = await createStudent(
       {
@@ -126,25 +126,6 @@ export async function createStudentAction(
       idempotencyKey,
     );
 
-    stage = "photo";
-    if (photo instanceof File && photo.size > 0) {
-      const uploaded = await uploadStudentPhoto(branchID, student.id, photo, token);
-      await updateStudent(
-        student.id,
-        {
-          address: student.address,
-          birth_date: student.birth_date,
-          first_name: student.first_name,
-          gender: student.gender,
-          last_name: student.last_name,
-          phone: student.phone,
-          profile_photo_file_id: uploaded.id,
-          status: student.status,
-        },
-        token,
-      );
-    }
-
     stage = "account";
     await createStudentAccount(
       student.id,
@@ -157,6 +138,36 @@ export async function createStudentAction(
       token,
       idempotencyKey ? `${idempotencyKey}:account` : undefined,
     );
+
+    if (photo instanceof File && photo.size > 0) {
+      try {
+        const uploaded = await uploadStudentPhoto(
+          branchID,
+          student.id,
+          photo,
+          token,
+        );
+        await updateStudent(
+          student.id,
+          {
+            address: student.address,
+            birth_date: student.birth_date,
+            first_name: student.first_name,
+            gender: student.gender,
+            last_name: student.last_name,
+            phone: student.phone,
+            profile_photo_file_id: uploaded.id,
+            status: student.status,
+          },
+          token,
+          idempotencyKey ? `${idempotencyKey}:photo-update` : undefined,
+        );
+      } catch {
+        // Student and account creation are the critical writes. A transient
+        // object-storage/photo failure should not present the saved student as
+        // a failed registration.
+      }
+    }
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 409) {

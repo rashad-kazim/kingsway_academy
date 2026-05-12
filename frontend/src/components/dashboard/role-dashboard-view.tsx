@@ -280,9 +280,9 @@ function ScopeButton({
   return (
     <Link
       className={cn(
-        "inline-flex min-h-10 cursor-pointer items-center rounded-full border border-[#dce3ee] bg-white px-5 text-sm font-bold text-[#0a284b] shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#ef2334]/40 hover:text-[#ef2334] dark:border-[#3a4658] dark:bg-[#17243a] dark:text-[#f3f6fa] dark:hover:border-[#ff3b4f]/50 dark:hover:text-[#ff5a69]",
+        "inline-flex min-h-10 cursor-pointer items-center rounded-full border border-kw-c-dce3ee bg-white px-5 text-sm font-bold text-kw-c-0a284b shadow-sm transition-all hover:-translate-y-0.5 hover:border-kw-c-ef2334/40 hover:text-kw-c-ef2334 dark:border-kw-c-3a4658 dark:bg-kw-c-17243a dark:text-kw-c-f3f6fa dark:hover:border-kw-c-ff3b4f/50 dark:hover:text-kw-c-ff5a69",
         active &&
-          "border-[#ef2334] bg-[#ef2334] text-white shadow-[0_0_22px_rgba(239,35,52,0.35)] hover:text-white dark:border-[#ff3b4f] dark:bg-[#ff3b4f] dark:text-white dark:shadow-[0_0_24px_rgba(255,59,79,0.35)] dark:hover:text-white",
+          "border-kw-c-ef2334 bg-kw-c-ef2334 text-white shadow-kw-red-glow hover:text-white dark:border-kw-c-ff3b4f dark:bg-kw-c-ff3b4f dark:text-white kw-dark-shadow-red-glow dark:hover:text-white",
       )}
       href={href}
     >
@@ -328,15 +328,31 @@ function ownerMetricsFor(
 
 function CourseDistribution({ labels }: { labels: DashboardViewLabels }) {
   const courses = [
-    { label: labels.ownerGlobal.courses.ielts, value: 0, color: "#ff3b4f" },
-    { label: labels.ownerGlobal.courses.sat, value: 0, color: "#306186" },
-    { label: labels.ownerGlobal.courses.physics, value: 0, color: "#22c55e" },
-    { label: labels.ownerGlobal.courses.other, value: 0, color: "#f59e0b" },
+    {
+      label: labels.ownerGlobal.courses.ielts,
+      value: 0,
+      color: "var(--color-kw-c-ff3b4f)",
+    },
+    {
+      label: labels.ownerGlobal.courses.sat,
+      value: 0,
+      color: "var(--color-kw-c-306186)",
+    },
+    {
+      label: labels.ownerGlobal.courses.physics,
+      value: 0,
+      color: "var(--color-kw-c-22c55e)",
+    },
+    {
+      label: labels.ownerGlobal.courses.other,
+      value: 0,
+      color: "var(--color-kw-c-f59e0b)",
+    },
   ];
   const total = courses.reduce((sum, course) => sum + course.value, 0);
 
   return (
-    <Card className="rounded-lg dark:border-[#3a4658] dark:bg-[linear-gradient(180deg,#1e2a39_0%,#182331_100%)]">
+    <Card className="rounded-lg dark:border-kw-c-3a4658 kw-dark-card-gradient">
       <CardHeader>
         <CardTitle>{labels.ownerGlobal.courseDistribution}</CardTitle>
         <CardDescription>
@@ -346,15 +362,15 @@ function CourseDistribution({ labels }: { labels: DashboardViewLabels }) {
       <CardContent className="grid items-center gap-8 lg:grid-cols-[minmax(240px,0.8fr)_minmax(320px,1fr)]">
         <div className="flex justify-center">
           <div
-            className="relative flex size-64 items-center justify-center rounded-full bg-[#eef2f7] shadow-inner dark:bg-[#2a3444]"
+            className="relative flex size-64 items-center justify-center rounded-full bg-kw-c-eef2f7 shadow-inner dark:bg-kw-c-2a3444"
             style={{
               background:
                 total > 0
-                  ? "conic-gradient(#ff3b4f 0 45%, #306186 45% 75%, #22c55e 75% 90%, #f59e0b 90% 100%)"
+                  ? "conic-gradient(var(--color-kw-c-ff3b4f) 0 45%, var(--color-kw-c-306186) 45% 75%, var(--color-kw-c-22c55e) 75% 90%, var(--color-kw-c-f59e0b) 90% 100%)"
                   : undefined,
             }}
           >
-            <div className="flex size-32 items-center justify-center rounded-full bg-white text-center text-sm font-bold text-[#59667a] shadow-sm dark:bg-[#1b2635] dark:text-[#a7b0bf]">
+            <div className="flex size-32 items-center justify-center rounded-full bg-white text-center text-sm font-bold text-kw-c-59667a shadow-sm dark:bg-kw-c-1b2635 dark:text-kw-c-a7b0bf">
               {total > 0 ? `${total}` : labels.ownerGlobal.noCourseData}
             </div>
           </div>
@@ -362,7 +378,7 @@ function CourseDistribution({ labels }: { labels: DashboardViewLabels }) {
         <div className="grid gap-3">
           {courses.map((course) => (
             <div
-              className="flex items-center justify-between rounded-lg border border-[#dce3ee] bg-white/70 px-4 py-3 text-sm dark:border-[#3a4658] dark:bg-[#202b3a]/70"
+              className="flex items-center justify-between rounded-lg border border-kw-c-dce3ee bg-white/70 px-4 py-3 text-sm dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a/70"
               key={course.label}
             >
               <div className="flex items-center gap-3">
@@ -372,7 +388,7 @@ function CourseDistribution({ labels }: { labels: DashboardViewLabels }) {
                 />
                 <span className="font-semibold">{course.label}</span>
               </div>
-              <span className="font-bold tabular-nums text-[#59667a] dark:text-[#a7b0bf]">
+              <span className="font-bold tabular-nums text-kw-c-59667a dark:text-kw-c-a7b0bf">
                 {course.value}%
               </span>
             </div>
@@ -400,7 +416,7 @@ function UrgentTasks({ labels }: { labels: DashboardViewLabels }) {
   ];
 
   return (
-    <Card className="rounded-lg dark:border-[#3a4658] dark:bg-[linear-gradient(180deg,#1e2a39_0%,#182331_100%)]">
+    <Card className="rounded-lg dark:border-kw-c-3a4658 kw-dark-card-gradient">
       <CardHeader>
         <CardTitle>{labels.ownerGlobal.urgentTasks}</CardTitle>
         <CardDescription>{labels.ownerGlobal.urgentTasksDescription}</CardDescription>
@@ -408,12 +424,12 @@ function UrgentTasks({ labels }: { labels: DashboardViewLabels }) {
       <CardContent className="grid gap-3">
         {tasks.map((task) => (
           <div
-            className="flex items-center justify-between gap-4 rounded-lg border border-[#dce3ee] bg-white/70 px-4 py-4 dark:border-[#3a4658] dark:bg-[#202b3a]/70"
+            className="flex items-center justify-between gap-4 rounded-lg border border-kw-c-dce3ee bg-white/70 px-4 py-4 dark:border-kw-c-3a4658 dark:bg-kw-c-202b3a/70"
             key={task.title}
           >
             <div>
               <div className="font-bold">{task.title}</div>
-              <p className="mt-1 text-sm text-[#59667a] dark:text-[#a7b0bf]">
+              <p className="mt-1 text-sm text-kw-c-59667a dark:text-kw-c-a7b0bf">
                 {task.description}
               </p>
             </div>

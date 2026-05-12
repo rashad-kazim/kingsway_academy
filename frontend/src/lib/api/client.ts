@@ -95,6 +95,13 @@ export function login(email: string, password: string) {
   });
 }
 
+export function logoutSession(token: string) {
+  return apiFetch<{ ok: boolean }>("/v1/auth/logout", {
+    method: "POST",
+    token,
+  });
+}
+
 export function getSession(token: string) {
   return apiFetch<Session>("/v1/session", { token });
 }
@@ -125,18 +132,25 @@ export function updateBranch(
   branchId: string,
   input: UpdateBranchInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<Branch>(`/v1/branches/${branchId}`, {
     method: "PATCH",
     token,
+    idempotencyKey,
     body: input,
   });
 }
 
-export function deleteBranch(branchId: string, token: string) {
+export function deleteBranch(
+  branchId: string,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<Branch>(`/v1/branches/${branchId}`, {
     method: "DELETE",
     token,
+    idempotencyKey,
   });
 }
 
@@ -158,10 +172,15 @@ export function createRoom(
   });
 }
 
-export function deleteRoom(roomId: string, token: string) {
+export function deleteRoom(
+  roomId: string,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<Room>(`/v1/rooms/${roomId}`, {
     method: "DELETE",
     token,
+    idempotencyKey,
   });
 }
 
@@ -169,10 +188,12 @@ export function updateRoom(
   roomId: string,
   input: UpdateRoomInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<Room>(`/v1/rooms/${roomId}`, {
     method: "PATCH",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -199,18 +220,25 @@ export function updateStaff(
   staffId: string,
   input: UpdateStaffInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<StaffMember>(`/v1/staff/${staffId}`, {
     method: "PATCH",
     token,
+    idempotencyKey,
     body: input,
   });
 }
 
-export function deleteStaff(staffId: string, token: string) {
+export function deleteStaff(
+  staffId: string,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<StaffMember>(`/v1/staff/${staffId}`, {
     method: "DELETE",
     token,
+    idempotencyKey,
   });
 }
 
@@ -270,10 +298,12 @@ export function updateStudent(
   studentId: string,
   input: UpdateStudentInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<Student>(`/v1/students/${studentId}`, {
     method: "PATCH",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -295,10 +325,15 @@ export function createStudentAccount(
   );
 }
 
-export function deleteTeacher(teacherId: string, token: string) {
+export function deleteTeacher(
+  teacherId: string,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<Teacher>(`/v1/teachers/${teacherId}`, {
     method: "DELETE",
     token,
+    idempotencyKey,
   });
 }
 
@@ -323,10 +358,12 @@ export function updateTeacher(
   teacherId: string,
   input: UpdateTeacherInput,
   token: string,
+  idempotencyKey?: string,
 ) {
   return apiFetch<Teacher>(`/v1/teachers/${teacherId}`, {
     method: "PATCH",
     token,
+    idempotencyKey,
     body: input,
   });
 }
@@ -458,10 +495,15 @@ export function getFileDownloadURL(fileId: string, token: string) {
   });
 }
 
-export function deleteFile(fileId: string, token: string) {
+export function deleteFile(
+  fileId: string,
+  token: string,
+  idempotencyKey?: string,
+) {
   return apiFetch<FileObject>(`/v1/files/${fileId}`, {
     method: "DELETE",
     token,
+    idempotencyKey,
   });
 }
 
