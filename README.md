@@ -1065,6 +1065,14 @@ Only use Docker again after explicit instruction.
   - Current audit positives: no direct `<img>` usage in `frontend/src`, no direct `#RRGGBB` color literals in TS/TSX, no `bg-[#...]`/`text-[#...]`/`border-[#...]` theme classes remain, and critical write actions use idempotency keys.
   - Current audit gaps: several medium-large owner/client components remain, frontend E2E coverage is still smoke-level, full responsive/WCAG browser audit is not complete, and `npm audit --audit-level=high` reports high advisories through `next@16.2.4`.
   - Current frontend score: 8.1/10. Live-prep work to reach 10/10: dependency security update, broader E2E regression, accessibility/responsive pass, deeper component split, and production observability.
+- 2026-05-13 Pre-large-update baseline work:
+  - Added DB migration discipline documentation and `tools/check-db-migrations.ps1`; `tools/check-kingsway.ps1` now runs this guard when migrations/tooling are touched.
+  - Added current DB schema snapshot at `backend/docs/schema-snapshot-2026-05-13.md`, based on migrations through `202605110001_user_token_version.sql`.
+  - Added workflow/state-machine readiness notes at `backend/docs/workflow-state-readiness.md` without locking final states before the owner meeting.
+  - Updated API baseline by adding `backend/api/baseline-2026-05-13.md` and documenting missing auth endpoints (`POST /v1/auth/logout`, `GET /v1/users/email-availability`) in OpenAPI/frontend contract.
+  - Updated frontend Next packages to `next@16.2.6` and `eslint-config-next@16.2.6`; high-severity npm audit findings are clear, while a moderate Next-bundled PostCSS advisory remains because npm's suggested fix is breaking/downgrading.
+  - Added provider-neutral frontend client error telemetry: browser errors, unhandled promise rejections, and dashboard error-boundary errors post sanitized payloads to `/api/telemetry/client-error`.
+  - Verification passed with Docker disabled: DB migration check, frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, root quick check, and `npm audit --audit-level=high`.
 
 ## Next Steps
 

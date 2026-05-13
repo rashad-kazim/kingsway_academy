@@ -481,6 +481,7 @@ $moduleMode = $Module -ne "auto"
 $backendChanged = if ($moduleMode) { $Module -ne "frontend" } else { Test-ChangedUnder $changedFiles "backend" }
 $frontendChanged = if ($moduleMode) { Test-ModuleTouchesFrontend $Module } else { Test-ChangedUnder $changedFiles "frontend" }
 $apiContractChanged = Test-ChangedUnder $changedFiles "backend/api"
+$migrationChanged = Test-ChangedUnder $changedFiles "backend/migrations"
 $toolingChanged = Test-ChangedUnder $changedFiles "tools"
 $rootCheckChanged = $false
 foreach ($file in $changedFiles) {
@@ -552,6 +553,12 @@ function Invoke-QuickPhase {
 
   if (-not $script:ApiContractDone -and $apiContractChanged) {
     Invoke-ApiContractGuard
+  }
+
+  if ($migrationChanged -or $toolingChanged) {
+    Invoke-CheckStep "DB migration discipline" {
+      Invoke-CheckedScript (Join-Path $PSScriptRoot "check-db-migrations.ps1") "DB migration discipline check failed."
+    }
   }
 
   if ($frontendChanged) {

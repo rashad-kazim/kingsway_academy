@@ -30,10 +30,17 @@ Errors use:
 - `POST /v1/auth/login`
   - Request: `{ "email": "owner@example.com", "password": "password123" }`
   - Response: `{ "token": "...", "user": User }`
+- `POST /v1/auth/logout`
+  - Requires bearer token.
+  - Response: `{ "ok": true }`
+  - Effect: increments/revokes the current user's token version so existing tokens become invalid.
 - `GET /v1/me`
   - Response: `User`
 - `GET /v1/session`
   - Response: `{ "user": User, "principal": Principal, "branch": Branch?, "capabilities": string[], "dashboard_path": string }`
+- `GET /v1/users/email-availability?email=user@example.com`
+  - Requires bearer token.
+  - Response: `{ "email": "user@example.com", "available": true }`
 
 ## Role Dashboards
 
@@ -83,6 +90,7 @@ Errors use:
 - Owner-only outbox retry: `POST /v1/admin/outbox/{event_id}/retry`
 
 The OpenAPI contract is tracked at `api/openapi.yaml`.
+Current pre-large-update API baseline: `api/baseline-2026-05-13.md`.
 
 ## Frontend Routing Contract
 

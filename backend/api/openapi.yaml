@@ -80,6 +80,15 @@ paths:
           $ref: "#/components/responses/LoginResult"
         "401":
           $ref: "#/components/responses/Error"
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      description: Revokes the current token version for the authenticated user.
+      responses:
+        "200":
+          $ref: "#/components/responses/OK"
+        "401":
+          $ref: "#/components/responses/Error"
   /v1/me:
     get:
       tags: [auth]
@@ -98,6 +107,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+  /v1/users/email-availability:
+    get:
+      tags: [auth]
+      description: Checks whether an email can be used for a new login account.
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          $ref: "#/components/responses/EmailAvailability"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
   /v1/branches:
     get:
       tags: [academic]
@@ -1452,6 +1479,29 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    OK:
+      description: Generic success response.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok:
+                type: boolean
+    EmailAvailability:
+      description: Email availability check result.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, available]
+            properties:
+              email:
+                type: string
+                format: email
+              available:
+                type: boolean
     LoginResult:
       description: JWT token and user.
       content:

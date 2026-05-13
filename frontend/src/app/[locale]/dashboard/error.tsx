@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCcw } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,8 +10,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  errorToTelemetryPayload,
+  reportClientError,
+} from "@/lib/telemetry/client-error";
 
-export default function DashboardError({ reset }: { reset: () => void }) {
+export default function DashboardError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    reportClientError(errorToTelemetryPayload("app-error-boundary", error));
+  }, [error]);
+
   return (
     <Card className="rounded-lg">
       <CardHeader>
