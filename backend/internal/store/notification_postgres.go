@@ -19,7 +19,7 @@ func (p *Postgres) CreateNotification(ctx context.Context, notification domain.N
 		return domain.Notification{}, err
 	}
 
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		INSERT INTO notifications (branch_id, recipient_user_id, type, payload, dedupe_key)
 		VALUES (nullif($1, '')::uuid, $2, $3, $4::jsonb, nullif($5, ''))
 		ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO UPDATE SET dedupe_key = notifications.dedupe_key
@@ -36,7 +36,7 @@ func (p *Postgres) CreateNotification(ctx context.Context, notification domain.N
 }
 
 func (p *Postgres) ListNotifications(ctx context.Context, recipientUserID string, unreadOnly bool) ([]domain.Notification, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, coalesce(branch_id::text, ''), recipient_user_id::text, type, payload::text,
 			coalesce(dedupe_key, ''), read_at, created_at
 		FROM notifications
@@ -65,8 +65,50 @@ func (p *Postgres) ListNotifications(ctx context.Context, recipientUserID string
 	return notifications, nil
 }
 
+func (p *Postgres) ListNotificationsPage(ctx context.Context, recipientUserID string, unreadOnly bool, page domain.PageRequest) ([]domain.Notification, int, error) {
+	page = normalizePage(page)
+
+	var total int
+	if err := p.queryRow(ctx, `
+		SELECT count(*)
+		FROM notifications
+		WHERE recipient_user_id = $1
+			AND ($2 = false OR read_at IS NULL)
+	`, recipientUserID, unreadOnly).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	rows, err := p.query(ctx, `
+		SELECT id::text, coalesce(branch_id::text, ''), recipient_user_id::text, type, payload::text,
+			coalesce(dedupe_key, ''), read_at, created_at
+		FROM notifications
+		WHERE recipient_user_id = $1
+			AND ($2 = false OR read_at IS NULL)
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
+	`, recipientUserID, unreadOnly, page.Limit, page.Offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+	defer rows.Close()
+
+	notifications := make([]domain.Notification, 0, page.Limit)
+	for rows.Next() {
+		notification, err := scanNotification(rows)
+		if err != nil {
+			return nil, 0, mapPostgresError(err)
+		}
+		notifications = append(notifications, notification)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err)
+	}
+
+	return notifications, total, nil
+}
+
 func (p *Postgres) MarkNotificationRead(ctx context.Context, id string, recipientUserID string, readAt time.Time) (domain.Notification, error) {
-	row := p.pool.QueryRow(ctx, `
+	row := p.queryRow(ctx, `
 		UPDATE notifications
 		SET read_at = coalesce(read_at, $3)
 		WHERE id = $1 AND recipient_user_id = $2
@@ -93,8 +135,8 @@ func (p *Postgres) ListUsersByBranchAndRoles(ctx context.Context, branchID strin
 		return nil, domain.ErrInvalidInput
 	}
 
-	rows, err := p.pool.Query(ctx, `
-		SELECT id::text, coalesce(branch_id::text, ''), role, email, password_hash, first_name, last_name, is_active, created_at, updated_at
+	rows, err := p.query(ctx, `
+		SELECT id::text, coalesce(branch_id::text, ''), role, email, password_hash, first_name, last_name, is_active, token_version, coalesce(last_login_at::text, ''), created_at, updated_at
 		FROM users
 		WHERE is_active = true
 			AND role = ANY($2::text[])
@@ -125,7 +167,7 @@ func (p *Postgres) ListUsersByBranchAndRoles(ctx context.Context, branchID strin
 }
 
 func (p *Postgres) ListPendingPaymentReminders(ctx context.Context, now time.Time, horizon time.Time, limit int) ([]domain.Payment, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, student_id::text, amount_cents, currency, due_date,
 			paid_at, status, coalesce(receipt_file_id::text, ''), created_by_user_id::text, created_at, updated_at
 		FROM payments
@@ -157,9 +199,9 @@ func (p *Postgres) ListPendingPaymentReminders(ctx context.Context, now time.Tim
 }
 
 func (p *Postgres) ListFilesNearRetention(ctx context.Context, now time.Time, horizon time.Time, limit int) ([]domain.FileObject, error) {
-	rows, err := p.pool.Query(ctx, `
+	rows, err := p.query(ctx, `
 		SELECT id::text, branch_id::text, uploader_user_id::text, owner_type, owner_id::text,
-			category, purpose, original_filename, mime_type, original_size_bytes, stored_size_bytes,
+			category, coalesce(policy, ''), purpose, original_filename, mime_type, original_size_bytes, stored_size_bytes,
 			original_sha256, storage_bucket, storage_key, retention_until, deleted_at, created_at
 		FROM files
 		WHERE deleted_at IS NULL

@@ -2,43 +2,100 @@
 
 This file is the running memory for the project. At the start of each work session, read this file first. At the end of each work session, update it with what changed, what was deferred, and where to continue.
 
+Backend readiness planning is tracked separately in `Backend Readiness Sprint.md`; read that file only when working on backend architecture/readiness or resuming that sprint.
+
 ## Current Direction
 
 - Product: smart operation center for IELTS/SAT-focused education centers.
-- Frontend: Next.js App Router, TypeScript, Tailwind, shadcn/ui, EN/TR/AZ JSON i18n, dark/light mode.
+- Frontend: Next.js App Router, TypeScript, Tailwind, shadcn/ui, EN-first JSON i18n, dark/light mode. AZ/RU/DE JSON files intentionally stay empty until translation work starts.
 - Backend: Go, modular service boundaries, PostgreSQL-first data model, event-ready finance/file/notification flows.
-- Current build priority: frontend implementation/integration on top of the Dockerized full stack.
-- Docker status: Docker Desktop is installed and running. `docker info` succeeds with context `desktop-linux`, Docker `29.4.1`, Compose `v5.1.3`, and WSL distro `docker-desktop` running on WSL2.
+- Current build priority: full local development through native services while Docker is paused.
+- Historical Docker status: Docker Desktop was installed and verified earlier, but Docker is not used in the active workflow.
 - Docker storage: Docker app files are under `D:\Docker\Docker`; Docker WSL/data root is configured as `D:\DockerData`, so images/containers should use D instead of filling C.
 - WSL status: no separate Ubuntu distro is required for current Docker use; Docker's own `docker-desktop` WSL2 distro is enough.
 - Current checked disk free space after Docker infra pull/start: `C:` about 32.11 GB, `D:` about 191.05 GB, `E:` about 477.42 GB.
-- Database direction: Docker local infrastructure is now active. PostgreSQL/Redis/RabbitMQ/MinIO containers are running and backend defaults to PostgreSQL persistence.
-- Full-stack Docker status: root `compose.yaml` runs frontend, backend API, PostgreSQL, Redis, RabbitMQ, and MinIO together.
+- Database direction: PostgreSQL remains the backend persistence target. Local PostgreSQL/Redis/RabbitMQ/MinIO now run from native Scoop-installed binaries under the root `start-kingsway.cmd` workflow.
+- Full-stack Docker status: root `compose.yaml` still exists for future full-stack runs, but it is parked until the user explicitly asks to use Docker again.
+- Active workflow override as of 2026-05-02: Docker usage is paused until the user explicitly enables it again. Frontend changes should be run and checked through the local Next.js dev server for immediate feedback.
 
-## One-Command Local Run
+## Active Local Run
 
-Run the full stack from the project root:
+Use this workflow while Docker is paused:
+
+```bash
+start-kingsway.cmd
+```
+
+That script starts, without Docker:
+
+- Frontend: `http://127.0.0.1:3000/en/login`
+- Backend: `http://127.0.0.1:8080/healthz`
+- PostgreSQL on `127.0.0.1:5432`
+- Redis on `127.0.0.1:6379`
+- RabbitMQ on `127.0.0.1:5672`
+- MinIO API on `127.0.0.1:9000`
+- MinIO Console on `127.0.0.1:9001`
+
+Default local login after first start:
+
+- Email: `owner@kingsway.local`
+- Password: `Kingsway123!`
+
+Stop all local processes started by the script:
+
+```bash
+stop-kingsway.cmd
+```
+
+Data and logs live in `.runtime/`, which is ignored by git. `frontend/.env.local` and `backend/.env` are created automatically when missing.
+
+For frontend-only quick UI iteration, use:
+
+```bash
+cd frontend
+npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+## Local Check Modes
+
+For tiny visual/text-only edits, do not automatically run a check unless the user asks for it.
+
+Use the lightweight check when a quick confidence check is explicitly needed:
+
+```bash
+check-kingsway.cmd
+```
+
+This runs in `quick` mode by default. It checks whitespace, then only runs affected backend package tests/build and frontend lint when those areas changed. It does not start the app, run Next build, PostgreSQL integration tests, or Playwright E2E.
+
+Use the medium check before handing off a larger local change:
+
+```bash
+check-kingsway.cmd -Mode standard
+```
+
+This now runs as a step ladder: quick phase first, then only the standard additions that did not already pass in quick. It still skips frontend production build, app startup, PostgreSQL integration tests, and E2E.
+
+Use the full regression gate only after finishing a full menu/module, before a major handoff, or when specifically debugging regressions:
+
+```bash
+check-kingsway.cmd -Mode full
+```
+
+This now runs as a step ladder: quick phase, then standard additions, then only full additions. The full additions are frontend production build, app health, PostgreSQL integration tests, and Owner Playwright smoke tests. Detailed logs are written under `.runtime/check-kingsway.log`; the terminal should stay short unless something fails.
+
+## Docker Full-Stack Run
+
+Docker is parked until the user explicitly re-enables it. Do not run `docker compose` for local startup or frontend iteration in the current workflow.
+
+Historical command retained only for later:
+
 
 ```bash
 docker compose up -d --build
 ```
 
-On Windows, double-click `start-kingsway.cmd` for the same startup flow. Double-click `stop-kingsway.cmd` to stop containers without deleting data.
-
-Open:
-
-- Frontend: `http://127.0.0.1:3000/en/login`
-- API health: `http://127.0.0.1:8080/healthz`
-- RabbitMQ UI: `http://127.0.0.1:15672` with `kingsway` / `kingsway`
-- MinIO Console: `http://127.0.0.1:9001` with `kingsway` / `kingsway-secret`
-
-Stop without deleting data:
-
-```bash
-docker compose down
-```
-
-Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Redis/MinIO data.
+Only use Docker again after explicit instruction.
 
 ## Role Panels
 
@@ -56,9 +113,21 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
 - Salary privacy: only Owner and the related Teacher can see salary details; Receptionist cannot.
 - Swap fairness: teacher salary allocation follows the number of days each teacher taught.
 - File policy:
-  - Standard files can be optimized/compressed.
-  - Special files must preserve original file bytes/hash.
+  - Maximum upload size is 15 MB per file.
+  - Before adding any new file upload UI, ask which category the upload belongs to and explain the upload-time optimization plus download-time behavior before writing code.
+  - Lossy optimization cannot be reversed. If a file must later download in original visual/content quality, store the original or a content-preserving sanitized object; do not rely on reversing compression.
+  - `standard` / "Sadece dosya": normal files. Safe optimization/compression may be applied later. If original download quality is required, store original plus optional optimized preview; do not rely on reversing compression.
+  - `special` / "Cok onemli dosya": official or critical files. Visible/content data must not be altered. PDFs may have non-content metadata removed; JPG/PNG/WebP special images should not be recompressed or quality-ratio converted. At-rest encryption is required in the target architecture.
+  - `standard` + `profile_photo`: UI-only display image. It is optimized for storage/display and is not designed to recreate the original file on download.
   - Writing exam documents are retained for 60 days; scores remain permanent.
+- Regression policy: whenever a menu/module is considered fully complete, ask the user whether to add or extend full E2E coverage for that module before moving to the next module.
+
+## File Architecture Decisions
+
+- Special files are the "vault" class: store encrypted at rest with AES-256-GCM/envelope encryption. For Special PDFs, non-content metadata may be stripped, but page content, text, images, layout, signatures, stamps, and visual meaning must not be changed. For Special JPG/PNG/WebP images, do not recompress or apply 90% quality conversion; keep the image content unchanged and only decrypt on download. "Exact original bytes" is required only when a workflow explicitly needs hash equality; otherwise the required guarantee is content-preserving download.
+- Standard downloadable images can have two stored objects when original download quality matters: original object for download plus optimized derivative for preview/UI. If only optimized download is needed, sharpening/enhancement may improve perceived clarity but it never reconstructs lost pixels.
+- Standard PDFs/documents can be cleaned/optimized for normal use, but if the user must download original quality, keep the original object and serve it on download.
+- UI/avatar/profile images are optimized display assets: no original recovery promise; they prioritize fast loading and low storage.
 
 ## Completed
 
@@ -87,15 +156,97 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
   - Added backend and frontend production Dockerfiles plus `.dockerignore` files.
   - Configured Next.js standalone output for the frontend container.
   - Added configurable frontend auth cookie security so local HTTP Docker login can work while production can still use Secure cookies.
-- Frontend login design pass completed 2026-04-29:
-  - Rebuilt `/[locale]/login` to match the provided split dark/purple reference layout.
-  - Added Kingsway Academy logo and login illustration assets under `frontend/public/images`.
+- Frontend login redesign completed 2026-04-30:
+  - Rebuilt `/[locale]/login` as a full-screen responsive education-themed page with a white login card.
+  - Removed the Student/Teacher switcher from the provided reference because Kingsway login is role-neutral.
   - Kept login as a shared multi-role entry point based on `Roles.docx`; backend session still routes users to the correct role dashboard.
   - Added password visibility toggle and localized login copy for EN/TR/AZ.
-- Frontend login correction pass completed 2026-04-29:
-  - Removed the blue frame, outer padding, and visible logo from `/[locale]/login`.
-  - Made the login page viewport-locked with no page scroll.
+  - Removed unused image assets; the login scene is now CSS/HTML-based and the only retained app image is `src/app/favicon.ico`.
   - Added global pointer cursor behavior for active clickable controls.
+- Frontend login redesign updated 2026-05-01:
+  - Rebuilt `/[locale]/login` again against the latest split-screen reference.
+  - Added the provided right-side education illustration at `frontend/public/images/login-right-side.png` and renders it as a foreground image, not a dark full-panel background.
+  - Added an icon-only transparent Kingsway mark at `frontend/public/images/kingsway-mark.png`; the academy text is excluded from the login logo.
+  - Applied the requested login palette: left background `rgb(245,247,250)`, left shapes `rgb(230,234,240)`, right gradient from `rgb(10,40,75)` to `rgb(15,55,100)`, and right shapes `rgb(35,75,120)` at low opacity.
+  - Moved animated bubble shapes behind the content, removed the right-side bottom red line, reduced the left form scale, and reduced the right hero headline size.
+  - Current retained app images are only the favicon plus the two used login assets.
+- Frontend login adjustment and Docker pause completed 2026-05-02:
+  - Moved login bubbles into one full-page background layer so bubbles no longer get clipped at the left/right split.
+  - Updated login colors: left background `rgb(253,253,253)`, left bubble color `rgb(248,248,249)`, and labels/normal input borders use the right-side navy `#0a284b`.
+  - Login inputs now use black text, `rgb(253,253,253)` backgrounds, navy borders by default, and red borders only for invalid login/input states.
+  - Regenerated the icon-only Kingsway mark with transparent outer background and increased its displayed size.
+  - Disabled the Next.js dev indicator so local frontend previews do not show the bottom-left dev badge.
+  - Docker usage is paused until explicitly re-enabled by the user; frontend iteration now uses local `npm run dev`.
+- Docker-free local infrastructure completed 2026-05-02:
+  - Installed/verified native local PostgreSQL 16, Redis, RabbitMQ/Erlang, and MinIO through Scoop.
+  - Reworked `start-kingsway.cmd` to start PostgreSQL, Redis, RabbitMQ, MinIO, backend, and frontend without Docker.
+  - Reworked `stop-kingsway.cmd` to stop the local app processes and infrastructure started for this project.
+  - Added `.runtime/` for ignored local data/logs/PID files.
+  - First local DB start creates default owner login `owner@kingsway.local` / `Kingsway123!` if no owner exists.
+- Frontend login bubble correction completed 2026-05-02:
+  - Login bubbles now render through separate clipped left/right background layers, so a bubble crossing the center split takes the left bubble color on the left side and the right bubble color on the right side.
+  - Left-side bubbles were made more visible.
+  - The right-side login illustration now sits at `bottom: 0`.
+- Frontend login logo/bubble color adjustment completed 2026-05-02:
+  - Left login bubbles now use `#e3e3e8`.
+  - Login logo now uses the provided square `frontend/public/images/kingsway-mark.png` dimensions and renders larger.
+- Owner branch onboarding/shell foundation completed 2026-05-02:
+  - Owner login remains `owner@kingsway.local` / `Kingsway123!`.
+  - Owner dashboard now shows first-branch setup when no branch is selected/available.
+  - Branch setup form includes branch photo upload preview, unique branch-name acceptance icon, address textarea, and backend-backed branch save.
+  - After save, owner sees branch cards plus a same-sized add-branch card.
+  - Branch cards show circular photo/initials, branch name, address, active student/teacher counts, and a photo-edit icon.
+  - Selecting a branch opens the shared dashboard shell.
+  - Shared dashboard shell now has fixed top header, hamburger/X sidebar toggle, centered branding, theme toggle, language dropdown, collapsible sidebar with closed-state tooltips, scrollable main content, and footer at the end of content.
+- Owner onboarding/header refinement completed 2026-05-02:
+  - Owner first-branch page now uses a static navy header (`#0a284b`) aligned with the Kingsway mark.
+  - Header right controls are standardized as language dropdown, swipe-style dark/light toggle, and profile dropdown with sign out.
+  - Language routing/dropdown now supports English, Azerbaijan, Russian, and German; all active site copy is sourced from `en.json` for now.
+  - `az.json`, `ru.json`, and `de.json` are intentionally empty and should not be edited until the user asks for translation work.
+  - Owner onboarding, shared shell, and dashboard visible labels now come from JSON message files.
+  - First-branch setup uses a fixed desktop no-scroll layout and animated left-side intro copy.
+  - First-branch setup badge was scaled up to better match the large onboarding headline.
+  - Language dropdown width now matches its header trigger, the dark/light toggle shows the active icon, and theme switching visibly affects the dashboard/onboarding surface.
+  - Owner onboarding text/form columns are centered as two balanced halves, with the gap increased by 20%.
+  - Profile dropdown sign out now transitions only its text/icon to red on hover/focus while keeping the default hover background, and the owner onboarding Save button now uses a green success accent.
+  - The `Kingsway` word in the owner onboarding headline is highlighted in brand red in both light and dark mode.
+  - Branch photo upload now has the dashed border on the circular image target only, matching the circular stored branch photo preview.
+  - Removed the visible upload helper text from the branch photo upload control, leaving only the circular icon target.
+  - Frontend-facing branch save errors are mapped to user-friendly UI messages instead of raw backend errors.
+  - Branch photo save was corrected so the file input stays in the form and photos upload through the backend `/v1/files/upload` path into the existing files/MinIO flow instead of being frontend-only.
+  - Owner branch lists now attach the latest backend-backed branch profile photo URL when rendering cards, and branch photo edits also upload through the same backend file path.
+  - Increased the local Next.js Server Action body limit and added frontend validation so branch photos must be images up to the current upload limit.
+  - Backend `POST /v1/files/upload` now enforces the maximum upload size.
+  - Verification after the branch photo fix: `npm run lint` and `npm run build` passed in `frontend/`.
+  - File upload policy was clarified: `standard` means "Sadece dosya" and can later be safely optimized, `special` means "Cok onemli dosya" and must preserve original bytes/hash.
+  - Backend image optimization for `standard` + `profile_photo` uploads was implemented: accepted source types are JPG/PNG/WebP, then auto-orientation, metadata stripping, center square crop, forced 768x768 output even for small images, and JPEG quality 85 storage.
+  - File download policy was clarified: lossy compression is not reversible. Future downloadable optimized files must store the original object separately and return original bytes on download; profile photos are treated as UI-only optimized images.
+  - Special-file policy was refined: Special PDFs may strip only non-content metadata, but page/content/visual meaning must not change; Special JPG/PNG/WebP images are not recompressed or quality-ratio converted.
+  - Owner first-branch photo upload was explicitly confirmed as `standard` + `profile_photo` / UI-avatar: JPG/PNG/WebP only, no original-download promise, backend optimized to 768x768 JPEG quality 85.
+  - Owner first-branch photo picker now validates file type/size before previewing the image, and the backend rejects unsupported `profile_photo` image MIME types.
+- Owner Branch Management edit flow completed 2026-05-03:
+  - Branch detail editing no longer opens in a drawer; clicking a branch row opens a full content-area edit page inside Branch Management.
+  - Edit page order is now profile photo, branch name, branch address, operational hours, and room management.
+  - Save/Cancel controls were added. Save persists branch name, slug, address, opening/closing time, profile photo replacement/removal, room creation, and room deactivation.
+  - Backend now has operational hour fields on branches, `DELETE /v1/rooms/{id}` for room deactivation, and `DELETE /v1/files/{id}` for profile photo removal.
+  - Added migration `backend/migrations/202605030001_branch_operational_hours.sql`; next native local start applies it to PostgreSQL.
+  - Verification: `frontend npm run lint`, `frontend npm run build`, and `backend go test ./...` passed.
+- Backend branch-edit hardening completed 2026-05-03:
+  - Added backend tests for owner-only branch profile updates, operational hour validation, room deactivate/list hiding, and profile file deletion.
+  - Updated OpenAPI/frontend contract with `PATCH /v1/branches/{branch_id}`, `DELETE /v1/rooms/{room_id}`, and `DELETE /v1/files/{file_id}`.
+  - Verification note: `go test ./...` is blocked for one temp academic test binary by Windows Application Control, so `academic` and `files` tests were compiled into `.runtime/*.test.exe` and run directly; both passed. Other backend packages passed through `go test ./...` before the block.
+- Branch Management detail UI adjustment completed 2026-05-03:
+  - Fixed the branch table header two-tone padding by removing the parent card vertical padding.
+  - Branch detail photo area is now centered, without the visible "Branch photo" label, and edit/remove buttons sit under the circular image.
+  - Branch name and branch address now sit side by side.
+  - Room Management now shows existing rooms first, then a centered Add Room button; clicking it reveals room name/capacity inputs with Save and Cancel controls.
+  - Verification: `frontend npm run lint` and `frontend npm run build` passed.
+- Branch Detail save/runtime fix completed 2026-05-03:
+  - Root cause for Save failure was a stale local backend binary still running without the new `PATCH /v1/branches/{branch_id}` route.
+  - Updated `tools/start-local-dev.ps1` so `start-kingsway.cmd` restarts/rebuilds the backend when backend source files are newer than `.runtime/backend-api-server.exe`.
+  - Restarted the local backend through the non-Docker local start script and verified `PATCH /v1/branches/{branch_id}` returns success against the running API.
+  - Added Edit action before Delete for pending "Rooms to add" rows; editing opens the same Add Room form with the room values prefilled.
+  - Verification: `frontend npm run lint`, `frontend npm run build`, direct compiled `academic` backend tests, and live backend PATCH smoke test passed.
 - Backend initialized:
   - Go module `kingsway/backend`
   - Basic service folders: auth, academic, finance, files, notification
@@ -176,18 +327,73 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
     - `GET http://127.0.0.1:8080/healthz` returned `ok`.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
     - Owner bootstrap plus `GET http://127.0.0.1:3000/en/dashboard/owner` with the JWT cookie returned `200 OK`.
-  - 2026-04-29 login redesign verification:
+  - 2026-04-30 login redesign verification:
     - `npm run lint` passed.
     - `npm run build` passed.
     - `docker compose up -d --build frontend` rebuilt and restarted the frontend container.
+    - `docker compose ps frontend api` showed both services healthy.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
-    - Chrome headless screenshots saved to `frontend/verification/login-desktop.png` and `frontend/verification/login-mobile.png`.
-    - Authenticated owner dashboard smoke test returned `200 OK` after login/bootstrap token setup.
-  - 2026-04-29 login correction verification:
+    - Chrome headless desktop, tablet, and mobile screenshots were generated for visual QA, then removed so no unused image files remain.
+  - 2026-05-01 latest login redesign verification:
     - `npm run lint` passed.
     - `npm run build` passed.
     - `docker compose up -d --build frontend` rebuilt and restarted the frontend container.
+    - `docker compose ps frontend api` showed both services healthy.
     - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Chrome headless desktop and mobile screenshots were generated for visual QA, confirmed no horizontal clipping after adjustment, then removed so no unused verification images remain.
+  - 2026-05-02 Docker-paused frontend verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+    - Local Next dev server started with `npm run dev -- --hostname 127.0.0.1 --port 3000`.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Chrome headless mobile screenshot confirmed the dev indicator is hidden and the mobile form no longer clips; screenshot was removed afterward.
+  - 2026-05-02 Docker-free full local verification:
+    - `start-kingsway.cmd` started frontend, backend, PostgreSQL, Redis, RabbitMQ, and MinIO without Docker.
+    - Listening ports verified: `3000`, `8080`, `5432`, `6379`, `5672`, `9000`, and `9001`.
+    - `GET http://127.0.0.1:8080/healthz` returned `200 OK`.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+    - Login with `owner@kingsway.local` / `Kingsway123!` succeeded and `GET /v1/session` returned `/dashboard/owner`.
+    - `stop-kingsway.cmd` stopped frontend, backend, PostgreSQL, Redis, RabbitMQ, and MinIO.
+  - 2026-05-02 login bubble correction verification:
+    - `npm run lint` passed.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+  - 2026-05-02 login logo/bubble color verification:
+    - `npm run lint` passed.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+  - 2026-05-02 owner branch onboarding/shell verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+    - Authenticated smoke for `GET http://127.0.0.1:3000/en/dashboard/owner` returned the owner branch setup/list screen.
+    - `GET http://127.0.0.1:3000/en/login` returned `200 OK`.
+  - 2026-05-02 owner onboarding/header refinement verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+    - `git diff --check` passed with only line-ending warnings.
+  - 2026-05-02 owner onboarding badge scale verification:
+    - `npm run lint` passed.
+  - 2026-05-02 owner header/theme/layout refinement verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 local stack startup verification:
+    - `start-kingsway.cmd` completed without Docker.
+    - Ports `3000`, `8080`, `5432`, `6379`, `5672`, `9000`, and `9001` were listening.
+    - `GET http://127.0.0.1:8080/healthz` returned `200`.
+    - `GET http://127.0.0.1:3000/en/login` returned `200`.
+  - 2026-05-02 profile dropdown/save button refinement verification:
+    - `npm run lint` passed.
+  - 2026-05-02 sign out hover/save success color verification:
+    - `npm run lint` passed.
+  - 2026-05-02 owner headline brand highlight verification:
+    - `npm run lint` passed.
+  - 2026-05-02 branch photo circular upload target verification:
+    - `npm run lint` passed.
+  - 2026-05-02 branch photo dashed border correction verification:
+    - `npm run lint` passed.
+  - 2026-05-02 branch photo helper text removal verification:
+    - `npm run lint` passed.
+  - 2026-05-02 branch photo/backend upload limit verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
 - Backend:
   - `go mod verify` passed.
   - `go test ./...` passed.
@@ -241,20 +447,637 @@ Only use `docker compose down -v` when intentionally wiping local PostgreSQL/Red
     - `go test -c ./internal/academic`, `go test -c ./internal/notification`, and `go test -c ./internal/integration` passed; academic and notification test binaries passed from package directories, while this environment also blocked running the compiled integration test binary.
     - `go build -o tmp/api-server.exe ./cmd/api-server` passed.
     - Temporary memory-mode HTTP smoke test on `http://127.0.0.1:18086` passed for `GET /healthz`, `GET /readyz`, owner bootstrap, owner-only `GET /v1/admin/outbox?status=failed`, `X-Request-ID` propagation, and `GET /metrics`.
+  - 2026-05-02 upload limit verification:
+    - `go build -o tmp/api-server.exe ./cmd/api-server` passed.
+    - `go test ./internal/httpapi` passed.
+  - 2026-05-02 standard profile image optimization verification:
+    - `go test ./internal/files` passed.
+    - `go build -o tmp/api-server.exe ./cmd/api-server` passed.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 file compression/download policy verification:
+    - `go test ./internal/files` passed.
+    - `npm run lint` passed.
+  - 2026-05-02 special-file metadata policy verification:
+    - `go test ./internal/files` passed.
+    - `npm run lint` passed.
+  - 2026-05-02 owner branch photo upload policy verification:
+    - `npm run lint` passed.
+    - `npm run build` passed.
+    - `go build -o tmp/api-server.exe ./cmd/api-server` passed.
+    - `go test ./internal/files` was blocked by Windows Application Control under `%TEMP%`; `go test -c ./internal/files -o tmp/files.test.exe` passed and `tmp/files.test.exe` passed from the package directory.
+  - 2026-05-02 owner branch list refinement:
+    - Branch list title was removed; the branch selection instruction is centered and animated.
+    - Existing branch and add-branch cards are centered and use the same main card height.
+    - Branch card text now shows JSON-backed Branch Name and Branch Address labels, with address clamped to two lines.
+    - Branch photo display was enlarged; branch photo edit control is centered 10px below the card at 48x48px.
+    - Fixed the topbar theme toggle hydration mismatch by rendering a deterministic first client pass before applying the resolved theme.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch list visual polish:
+    - Removed animation from the branch selection instruction and promoted it to a centered page-heading style.
+    - Existing branch and add-branch columns now reserve the same total height, including the edit-control row.
+    - Removed the visible add-branch dashed border and replaced both cards with softer light/dark themed surfaces and shadows.
+    - Branch card text, separators, edit control, photo ring, and add card now respond to light/dark mode.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch edit flow:
+    - Added backend `PATCH /v1/branches/{branch_id}` for owner-only branch name/slug/address updates.
+    - Added frontend branch update client/action and wired the branch edit button to open the branch setup form with existing branch data prefilled.
+    - Edit mode left copy now shows "Welcome Back," and "Edit your existed Kingsway Branch"; the branch description no longer contains "first".
+    - Edit form can also replace the branch profile photo through the existing `standard` + `profile_photo` backend upload path.
+    - `go test ./internal/academic` passed.
+    - `go test ./internal/httpapi` passed.
+    - `go build -o tmp\api-server.exe ./cmd/api-server` passed.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch card height correction:
+    - Fixed the branch card height mismatch caused by shadcn Card default vertical padding; visible branch and add cards now use the same fixed height.
+    - Branch list heading text changed to "Choose a branch".
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch edit intro polish:
+    - Reduced the edit-mode intro weight: smaller setup badge, lighter "Welcome Back," row with a red accent line, and a more controlled edit headline size.
+    - Edit-mode description text was tightened to better match the new heading hierarchy.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner choose-branch card hierarchy polish:
+    - Choose Branch cards now show the branch name as the main title without label prefixes.
+    - Address now appears as a muted MapPin row with a two-line clamp.
+    - Student and Teacher counts moved into subtle red-tinted badges.
+    - Add Branch card was softened with transparent glass styling and hover icon scale/rotation.
+    - Dark owner workspace background now uses Midnight Blue `#0A192F`; cards use glassmorphism surfaces with `border-white/10`.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner choose-branch quick actions:
+    - Added Finance, Weekly Program, and Settings circular quick action links under the branch address.
+    - Quick action labels stay hidden by default and fade in below the hovered icon.
+    - The main branch entry link and quick action links are separated to avoid nested interactive elements.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch edit removal:
+    - Removed the edit button from the Choose Branch cards.
+    - Removed the frontend branch edit mode and branch update action/client.
+    - Removed the backend branch update service/store/route and deleted `PATCH /v1/branches/{branch_id}` from the frontend contract/OpenAPI docs.
+    - `npm run lint` passed.
+    - `go test ./...` passed.
+    - `npm run build` passed.
+  - 2026-05-02 owner branch list scroll fix:
+    - Header remains fixed/static at the top of the owner branch page.
+    - Branch list content now owns vertical scrolling when cards wrap into a new row.
+    - Two-card branch view remains vertically centered without page scroll.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 local start backend fix:
+    - `start-kingsway.cmd` no longer starts the backend with `go run`, because Windows Application Control blocks Go's temporary `%LOCALAPPDATA%\go-build` executable.
+    - `tools/start-local-dev.ps1` now builds `backend` to `.runtime/backend-api-server.exe` from the backend module and starts that executable.
+    - Verified Docker-free startup: backend `GET http://127.0.0.1:8080/healthz` returned `{"status":"ok"}` and frontend `http://127.0.0.1:3000/en/login` returned HTTP `200`.
+  - 2026-05-02 owner branch grid and scrollbar fix:
+    - Branch list grid now supports 3 cards per desktop row.
+    - List mode uses a full-width scroll container so the scrollbar sits at the far right of the viewport.
+    - Content only switches to top-aligned scroll mode when cards wrap beyond one 3-card row.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 dark mode palette revision:
+    - Applied the softer dark palette to dashboard/common UI outside the login page: page `#101827`, header `#0b2746`, cards `#17243a`, elevated surfaces `#1d2b44`, primary text `#e2e8f0`, body text `#b7c4d6`, muted text `#7e8ea5`, borders `#64748b`, and dark brand red `#ff5a66`.
+    - Owner branch setup/list surfaces, inputs, cards, badges, quick actions, header controls, and app shell dark colors now follow the revised palette.
+    - Owner branch form errors now use an icon, dark red background `#3b1218`, border `#f87171`, and readable text colors `#ffe4e6` / `#fca5a5`.
+    - Login page was intentionally left unchanged.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 dark mode charcoal revision:
+    - Replaced the previous dark palette outside login with the deeper charcoal/navy palette: page `#0f1722` / `#0a111b`, navbar `#151f2c`, card `#1b2635`, card hover `#202d3e`, avatar `#2a3444`, icon surface `#202b3a`, borders `#334155` / `#3a4658`, text `#f3f6fa` / `#a7b0bf` / `#6f7a8a`, and accent red `#ff3b4f`.
+  - Dashboard/app shell and owner branch pages now use the charcoal radial background and lower-glare card/header surfaces.
+  - Owner branch cards now use subtle dark gradients, muted icon buttons, graphite avatars, and low-opacity red badges.
+  - Login page remains unchanged by request.
+  - `npm run lint` passed.
+  - `npm run build` passed.
+  - 2026-05-02 dashboard shell sidebar polish:
+    - Replaced the sidebar toggle icon with a custom three-line hamburger that morphs into an X on click.
+    - Sidebar background now matches the header color in light and dark modes.
+    - Removed the role/user block from the top of the sidebar.
+    - Prevented sidebar label overflow during width animation by delaying label reveal until the sidebar expansion finishes.
+    - Added a formal footer line with product name and copyright placeholder.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-02 dashboard shell header/sidebar refinement:
+    - Header branding now uses the Kingsway mark with horizontal `Kingsway Academy` text.
+    - Hamburger/X control was slimmed to match the height of header controls.
+    - Sidebar labels changed from `Command` to `Dashboard`, with a dashboard icon and active state for selected-branch dashboard pages.
+    - Sidebar icons and labels were enlarged, and shrink animation now keeps icons in a stable column while labels fade out.
+    - Footer now spans the full content width and resizes with the sidebar.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-03 dark mode shell color adjustment:
+    - Dark page background changed to `#0B1622`.
+    - Dark header/sidebar surfaces changed to `#121F2D`.
+    - Applied to global theme variables, dashboard shell, owner branch workspace, and header theme toggle surfaces.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-03 header dropdown/sidebar active fix:
+    - Header language and profile dropdown menus now render above the fixed header with `z-[1100]`.
+    - Active sidebar menu item background changed to `#306186`.
+    - `npm run lint` passed.
+  - 2026-05-03 owner sidebar label/icon update:
+    - Owner sidebar labels changed to: Global Dashboard, Branch Management, Teacher Finance & HR, Receptionist Management, Student Management, Scheduling & Rooms, Assignment & Swap, Payment Hub, Events & Exams.
+    - Owner-only icons were aligned with the new labels while preserving already suitable icons.
+    - Existing non-owner menu labels remain available for later role work.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-03 sidebar width adjustment:
+    - Expanded open sidebar width from `w-64` to `w-80` so longer owner menu labels fit better.
+    - Updated the main content offset from `left-64` to `left-80`.
+    - `npm run lint` passed.
+  - 2026-05-03 revised logo asset:
+    - `frontend/public/images/kingsway-mark.png` was replaced by the user with the revised logo asset.
+    - Existing frontend references already use `/images/kingsway-mark.png` in login, dashboard header, and owner branch header, so no code path change was needed.
+  - 2026-05-03 owner global dashboard layout:
+    - Removed the old owner dashboard heading/capability/table layout from the owner dashboard view.
+    - Added branch scope pills: All Branches plus each branch name, with the active scope highlighted in Kingsway red.
+    - Added `branch_id=all` support on the owner dashboard route so aggregate backend dashboard data can render without opening Branch Management.
+    - Kept the three existing summary cards and added Debt Tracker and Total Turnover cards in AZN format.
+    - Added Course Distribution pie/legend section and Action and Alert Center section.
+    - Current financial and course distribution cards render safe zero states until dedicated backend finance/course aggregation fields are added.
+    - `npm run lint` passed.
+    - `npm run build` passed.
+  - 2026-05-03 owner Branch Management view:
+    - Sidebar Branch Management now opens `/dashboard/owner?view=branches` inside the AppShell content area instead of the standalone branch picker.
+    - Added Branch Management header with Kingsway red `Add New Branch` sheet/drawer.
+    - The drawer uses the existing `standard` + `profile_photo` branch create action and JPG/PNG/WebP validation path.
+    - Added mini stats for Total Branches, Total Classrooms, and Capacity Status.
+    - Added a management data table with Branch Name/ID, Address, Rooms, Staff, Status, and Actions columns.
+    - Branch management table now uses a light/dark glassmorphism surface with translucent background, subtle border, blur, and deeper shadow.
+    - Branch management table header now uses the same glass surface background as the table body.
+    - Row click or Edit opens a right-side Branch Detail sheet with Room Management, branch name, address, operational hours, and branch assets fields.
+    - Detail edit persistence, room CRUD, branch archival, receptionist assignment avatars, and capacity data remain UI-ready placeholders until backend contracts are finalized.
+    - `npm run lint` passed.
+    - `npm run build` passed.
 
 ## Deferred
 
 - gRPC/protobuf transport is deferred.
 - Full goose CLI integration is deferred; backend currently has a built-in minimal runner for existing goose-style SQL files.
-- File optimization/compression for Standard files is deferred; uploads currently preserve bytes while recording Standard/Special policy. Safe implementation needs file-type-specific image/PDF/office processing choices and must never alter Special-file bytes.
+- File optimization/compression for general Standard documents is deferred. `standard` + `profile_photo` images are already optimized for UI storage. Future Standard document optimization can remove metadata, subset fonts, clean invisible layers, and conservatively downsample ordinary PDFs/images only when text readability/OCR edge clarity remains safe. Special files must never be altered.
 - Notification delivery channels beyond in-app notifications are deferred. Email/SMS/push require provider selection, credentials, templates, opt-out/bounce handling, and delivery audit tables.
 - Persistent audit-log storage is deferred. The backend now has structured request logging with `X-Request-ID`, but immutable per-action audit rows are not implemented yet.
 - Deep readiness checks are deferred. `GET /readyz` reports API readiness; live dependency pings for PostgreSQL/Redis/RabbitMQ/MinIO are still not wired after startup.
 - Frontend broad screen implementation is still pending beyond login/session and role dashboard shell.
-- Docker Desktop installation troubleshooting is complete; no more Docker installation steps are currently needed.
+  - Owner branch editing is intentionally removed from the current UI/API until the user asks for it again.
+  - Docker Desktop installation troubleshooting is complete; Docker remains parked and is not part of current startup.
+
+## Current Work Notes
+
+- 2026-05-03 owner Branch Management save/profile fix:
+  - Backend profile-photo upload now normalizes common image MIME aliases (`image/jpg`, `image/x-png`) and sniffs valid image bytes when the browser sends `application/octet-stream` or an empty MIME.
+  - Branch Management save now treats already-deleted files/rooms and already-created room drafts as idempotent, preventing the branch save from failing after the branch data itself was already updated.
+  - Branch Detail save now pushes the saved branch back into local frontend state before refresh, so returning to the Branch Management table and reopening the branch uses the latest photo/name/address immediately.
+  - Branch Management table now labels the first column `Branch Profile` and shows a circular branch photo/initials before the branch name and ID.
+  - Verification: `npm run lint`, `npm run build`, and `go test ./internal/files` passed.
+- 2026-05-03 branch/room duplicate UX fix:
+  - Branch create/edit name fields now show a live availability icon while typing.
+  - Room add/edit input now shows a live availability icon and blocks adding duplicate room names from the current branch/pending room list.
+  - Backend room conflict during Branch Detail save now maps to `This room already exists.` instead of the branch duplicate message.
+  - Verification: `npm run lint` and `npm run build` passed.
+- 2026-05-03 Branch Detail profile upload root-cause fix:
+  - Root cause: frontend correctly uploaded branch photos as `owner_type=branch`, but PostgreSQL `files_owner_type_check` did not allow `branch`, so valid JPG/PNG/WebP uploads failed with backend `invalid input` and the UI showed the generic invalid-photo message.
+  - Added migration `202605030002_allow_branch_file_owner.sql` to allow branch-owned file records.
+  - Verified the migration is applied locally and the live API now accepts `kingsway-mark.png`, optimizes it to `image/jpeg`, stores it in `kingsway-standard`, and returns it through `/v1/files`.
+  - Frontend now clears the temporary photo preview/file input after invalid photo or oversized photo failures so the user is not left seeing an unsaved preview.
+  - Verification: `npm run lint`, `go test ./internal/files`, direct `POST /v1/files/upload` -> `201`, direct `/v1/files` lookup -> saved profile file visible. `go test ./...` is blocked by Windows Application Control for the generated `academic.test.exe`.
+- 2026-05-03 local hot-update workflow fix:
+  - Added `tools/watch-backend.ps1`, started automatically by `tools/start-local-dev.ps1`.
+  - Backend watcher monitors `backend/**/*.go`, `backend/**/*.sql`, `backend/go.mod`, and `backend/go.sum`; on change it rebuilds `.runtime/backend-api-server.exe` and restarts only the backend process without Docker.
+  - `tools/stop-local-dev.ps1` now stops the backend watcher before stopping backend, preventing automatic restart during shutdown.
+  - Added dev-only `/api/dev-asset/[...path]` route with `no-store` headers for public assets.
+  - Static logo images now use dev cache-busting, so replacing `frontend/public/images/kingsway-mark.png` with the same filename refreshes in the running frontend without stale browser/Next image cache.
+  - Verification: PowerShell scripts parse cleanly, `npm run lint`, `npm run build`, `go test ./internal/files`, backend watcher timestamp smoke -> rebuild/restart, `GET /api/dev-asset/images/kingsway-mark.png` -> `200` with `Cache-Control: no-store`.
+- 2026-05-03 Branch Management header alignment:
+  - Aligned the `Add New Branch` button vertically with the Branch Management title/description block by changing the header row from `items-start` to `items-center`.
+  - Verification: `npm run lint` passed.
+- 2026-05-03 Add New Branch drawer photo preview:
+  - Added create-drawer photo preview state and object URL cleanup, so selected branch photos appear immediately after choosing a JPG/PNG/WebP file.
+  - Changed the create branch photo upload target from a rectangular drop area to a centered circular upload/photo preview control.
+  - Verification: `npm run lint` and `npm run build` passed.
+- 2026-05-03 Add New Branch drawer copy cleanup:
+  - Removed technical standard/profile-photo optimization wording from the drawer description.
+  - Replaced it with user-facing copy: `Create a new branch profile with its photo, name, and address.`
+  - Verification: `npm run lint` and `npm run build` passed.
+- 2026-05-03 Branch Management delete confirmation UI:
+  - Removed `View Reports` from the branch row actions dropdown.
+  - Added a darker `Delete` action below `Archive`.
+  - Added a two-step delete confirmation: first type the exact branch name, then confirm a warning that related student history, performance records, and teacher history will also be deleted.
+  - Cancel closes the full delete confirmation flow.
+  - Verification: `npm run lint` and `npm run build` passed.
+- 2026-05-03 Branch Management destructive delete:
+  - Added backend `DELETE /v1/branches/{branch_id}` for owner-only branch deletion.
+  - Delete removes active branch files from object storage first, then hard-deletes branch-owned DB rows in FK-safe order: notifications, exams/results, assignments, schedule, class/student relations, payments, salary models, classes, course metadata, rooms, students, teachers, files, branch users, outbox rows, and the branch.
+  - Memory store and academic service tests now cover owner-only branch delete and branch-data cascade cleanup.
+  - Frontend Delete confirmation now calls the backend and removes the deleted branch from the table immediately.
+  - Archive/Delete dropdown hover/focus keeps the original red icon/text colors instead of turning black.
+  - Updated OpenAPI/frontend contract with `DELETE /v1/branches/{branch_id}`.
+  - Verification: `go test ./...`, `npm run lint`, `npm run build`, live API smoke create/delete branch, and live API smoke create branch+room/delete branch all passed.
+- 2026-05-03 Branch Management staff/receptionist setup:
+  - Add New Branch drawer now includes vertical Opening time and Closing time fields.
+  - Added backend `staff_profiles` migration plus owner-only receptionist endpoints: `GET/POST /v1/branches/{branch_id}/staff`, `PATCH/DELETE /v1/staff/{staff_id}`.
+  - Receptionist records store name, surname, birth date, phone, AZN salary, login email, password hash, role, and optional standard/profile-photo file ID.
+  - Branch Detail now shows Staff Management before Room Management with Existing Staff, Add Staff, edit/delete, circular staff photo preview, digit-only salary entry, and the required warning when editing existing staff while a new staff form is open.
+  - Branch Management table now shows assigned receptionist avatars/counts per branch instead of a static unassigned placeholder.
+  - Updated frontend API types/client/actions and OpenAPI/frontend contract for branch staff.
+  - Verification: `npm run lint`, `npm run build`, and `go test ./cmd/api-server` passed. `go test ./internal/academic` is still blocked by Windows Application Control for the generated `academic.test.exe`.
+- 2026-05-04 Branch Detail staff/room UX polish:
+  - Staff birth date input now auto-formats digit-only typing like `15071998` into `15/07/1998`.
+  - Staff password input now has a show/hide eye toggle.
+  - Existing Rooms now support edit drafts; Branch Detail save persists them through new backend `PATCH /v1/rooms/{room_id}`.
+  - Existing Room delete now opens a user-facing warning dialog that Schedule, Events, and Tasks may be affected before marking the room for removal.
+  - Dashboard and staff salary displays now use the Manat symbol instead of `AZN`.
+  - Updated frontend API types/client/actions and OpenAPI/frontend contract for room update.
+  - Verification: `go test ./cmd/api-server`, `npm run lint`, and `npm run build` passed.
+- 2026-05-04 Teacher Finance & HR foundation:
+  - Added Owner-only backend `GET /v1/teacher-finance` with branch, subject, status, and salary model filters. Rows include teacher profile data, branch, subject summary, status, salary type, assigned student count, and calculated salary cents.
+  - Added backend `DELETE /v1/teachers/{teacher_id}` as an Owner-only destructive delete flow: assigned students block the action with `409`; otherwise teacher-owned/uploaded file objects are removed first, then the teacher, linked login user, and teacher-owned DB records are hard-deleted.
+  - Added the Owner sidebar Teacher Finance & HR view with filter dropdowns, glass table, status/salary labels, calculated salary in Manat, Edit/Delete actions, and two-stage delete confirmation.
+  - Teacher delete confirmation now has an extra final impact warning: after typing the teacher name, the first Delete opens a permanent-deletion warning, and only Continue performs the backend delete.
+  - Teacher delete impact warning copy was adjusted to avoid technical `Owner account` wording and use user-facing "not shared with you" language.
+  - Added `/[locale]/dashboard/owner/teacher/add` as a placeholder route for the Add Teacher button; full Add Teacher form details are deferred until the user provides that screen spec.
+  - Updated frontend API types/client/actions plus OpenAPI/frontend contract for teacher finance records and teacher delete.
+  - Verification: `go test ./cmd/api-server`, `npm run lint`, and `npm run build` passed. Docker was not used.
+- 2026-05-04 Add Teacher form implementation:
+  - Increased Branch Management and Teacher Finance & HR table row height so both tables feel less compressed.
+  - Replaced the Add Teacher placeholder with a full Owner form: circular profile photo picker, required-field stars, branch assignment, subject chips, salary model with dynamic financial inputs, DD/MM/YYYY birth date formatting, password visibility toggle, and centered Save/Cancel actions.
+  - Added live email availability checking through new authenticated backend `GET /v1/users/email-availability`.
+  - Extended backend teacher registration to persist teacher profile fields, create/attach subject courses, and create the selected salary model on registration.
+  - Added teacher profile persistence migration `202605040001_teacher_profiles.sql` and `PATCH /v1/teachers/{teacher_id}` for profile-photo linking after upload.
+  - Teacher profile photos use the existing `standard` + `profile_photo` upload path; current backend optimizer still stores screen-sized optimized JPEG, not WebP.
+  - Verification: `npm run lint`, `npm run build`, and `go test ./internal/...` passed. Docker was not used.
+- 2026-05-04 Branch delete confirmation warning polish:
+  - Branch Management delete confirmation now shows a prominent red irreversible-delete warning before the branch-name confirmation instructions.
+  - The Delete button remains disabled until the typed branch name exactly matches; Cancel closes the full delete dialog flow.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-04 Branch delete/startup bug fix:
+  - Fixed Branch Management actions so clicking the three-dot Delete item no longer bubbles into the table row and opens Branch Detail.
+  - Fixed backend startup failure by adding the missing Goose `-- +goose Up/Down` markers to `202605040001_teacher_profiles.sql`.
+  - Rebuilt `.runtime/backend-api-server.exe` after the migration fix.
+  - Verification: `npm run lint`, `npm run build`, `go test ./...`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-04 Teacher filters and Add Branch photo polish:
+  - Add New Branch drawer photo picker now shows the selected photo inside the circular control and adds a circular top-right remove button.
+  - Teacher Finance & HR now has a Reset Filter button plus removable selected-filter chips under the filter row.
+  - Add Teacher button now opens the form through the existing Owner dashboard route with `view=teacher-add`, avoiding stale dev-server route-cache 404s while keeping the direct `/dashboard/owner/teacher/add` route available.
+  - Verification: `npm run lint`, `npm run build`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Add Teacher photo and subject selector:
+  - Add Teacher form profile photo picker now matches the Add New Branch circular upload control, including the top-right circular remove button.
+  - Replaced Add Teacher subject chips with a multi-select dropdown labeled `Chose 1 or more Subject`; selected subjects are still submitted as separate `subjects` form values and at least one subject remains required.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Teacher status and filter row polish:
+  - Owner-created teachers now become `active` automatically when a salary model is submitted; non-owner teacher creation cannot submit salary data and remains pending for Owner review.
+  - Added migration `202605040002_activate_salary_model_teachers.sql` to activate already-created pending teachers that already have salary models.
+  - Teacher Finance & HR Reset Filter button now sits in the same filter row and uses the same 44px control height as the filter selects.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-04 Branch Detail photo control polish:
+  - Branch Detail profile photo now uses the same circular upload control as Add New Branch.
+  - Removed the separate `Edit photo` and `Remove photo` buttons; selecting/changing happens by clicking the photo circle, and removing uses the circular top-right `X`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Teacher edit flow:
+  - Teacher Finance & HR row Edit now opens the existing Add Teacher form in edit mode at `view=teacher-edit&teacher_id=...`.
+  - The edit form is prefilled with teacher profile, login email/name, branch, subjects, profile photo, and the latest salary model.
+  - Save updates teacher profile/login/subjects/photo through `PATCH /v1/teachers/{teacher_id}` and writes a fresh salary model; pending teachers become active after salary is saved.
+  - Updated frontend API types/client, OpenAPI, and frontend contract for teacher update.
+  - Verification: `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, `npm run lint`, `npm run build`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Teacher Finance filter/sidebar polish:
+  - Teacher Finance & HR filter card now only shows the extra chip row when at least one filter is selected, so the card stays shorter with no active filters.
+  - Sidebar Dashboard active state now only applies when no Owner sub-view is selected, fixing double-active Dashboard + Teacher Finance highlighting after window focus changes.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-04 Receptionist Management foundation:
+  - Removed the Staff Management UI from Branch Detail; the backend staff endpoints remain available.
+  - Added Owner sidebar routing for `Receptionist Management` at `view=receptionists`.
+  - Added a Receptionist Management page with Teacher Finance-style header/filters, selected-filter chips, card-based receptionist list, Active/Inactive status changing, hard Delete, and Add/Edit Staff form.
+  - Receptionist form now supports circular profile photo upload, branch assignment, name/surname, DD/MM/YYYY birth and hire dates, gender, phone, address, Manat salary, live email availability, and password visibility.
+  - Extended receptionist backend persistence with gender, address, hire date, active status, and last login tracking; `PATCH /v1/staff/{staff_id}` can update status and branch assignment, while `DELETE /v1/staff/{staff_id}` remains a hard delete.
+  - Add Teacher form fields now use consistent 44px control height, and Phone/Address were moved directly after Birth Date/Gender.
+  - Verification: `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, `npm run lint`, and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist Management list/edit polish:
+  - Replaced the Receptionist Management filter card with Dashboard-style rounded branch pills; `All Branches` is selected by default.
+  - Changed Existing Receptionists from card grid to single-line rows showing profile photo, full name, status, assigned branch, working hours, salary, and icon-only edit/delete actions.
+  - Edit now expands the selected row and renders the edit form inside that row instead of opening a separate form area.
+  - Delete now uses a two-step confirmation: exact receptionist full-name confirmation first, then a permanent-delete impact warning before hard delete.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist Management save/animation fix:
+  - Add Staff save is now guarded with client-side photo size validation and a `try/catch` around the server action, so failed saves show the existing UI error instead of a white screen.
+  - Added row expansion, edit panel, and profile-photo morph animations for receptionist inline edit.
+  - Replaced the salary icon rendering with a safe Unicode escape to avoid console/encoding corruption.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Receptionist Add Staff photo/save polish:
+  - Replaced the Add Staff profile photo picker with the same circular upload control used in the Add New Branch drawer, including selected-image preview and top-right remove button.
+  - Verified the backend staff create/delete endpoint with a direct local API smoke; valid receptionist payloads save correctly.
+  - Staff create/update actions now map backend `400 invalid input` to the receptionist form validation message instead of the generic save failure.
+  - Added strict client/server-action DD/MM/YYYY calendar validation so impossible dates are blocked before save.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-04 Receptionist hire-date validation:
+  - Added frontend and server-action validation that receptionist hire date cannot be earlier than birth date.
+  - Added backend service validation for the same rule so direct API calls cannot bypass it.
+  - The form now shows a specific user-facing message when hire date is before birth date.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-04 Receptionist delete dialog label fix:
+  - Added the missing Receptionist Management delete confirmation labels to `en.json`.
+  - Added a small fallback around the delete confirmation text to prevent a runtime crash if a translation key is missing.
+- 2026-05-04 Receptionist row layout and edit animation:
+  - Existing Receptionists rows now use the requested order: Profile, Gender, Branch, Status, Working Hours, Actions.
+  - Status is now a read-only badge in the row instead of a dropdown; status editing remains inside the expanded edit form.
+  - Removed salary from the row and balanced the grid columns for more even spacing.
+  - Added row-cell and form-field morph animations so profile/gender/branch/status/working-hours visually transition into the expanded form.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist shared-element edit flow:
+  - Added `framer-motion` to the frontend and replaced the old CSS-only receptionist edit morph with shared `layoutId` transitions.
+  - Existing Receptionists rows now use the requested order: Profile, Gender, Branch, Working Hours, Salary, Status, Actions.
+  - Inline edit opens from the summary row or Edit button; avatar/name/branch/gender/hours/salary/status move into the form, while extra fields fade in with a slight upward motion.
+  - Opening an edit row now smooth-scrolls the row into view.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist edit transition tuning:
+  - Softened the shared-element transition by lowering spring stiffness and increasing reveal duration, so receptionist edit elements move into place less sharply.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist edit blank-gap fix:
+  - Fixed the intermittent blank space when opening receptionist edit by replacing separate summary/form animation wrappers with one `AnimatePresence` slot.
+  - The edit form now immediately takes over the row area while shared elements move into place.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist video review animation fix:
+  - Reviewed the supplied edit open/close recording and adjusted the receptionist row animation to prevent the form container itself from sliding upward into place.
+  - Added a layout wrapper around the card height transition and changed summary/editor enter-exit motion to opacity-only; shared elements still move with `layoutId`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist cancel transition fix:
+  - Removed parent fade transitions from the receptionist summary/editor swap so Cancel can animate shared elements back into the row instead of making the form disappear first.
+  - The outer card still handles height/layout movement; common row/form elements keep using shared `layoutId`.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Receptionist opening jump fix:
+  - Prevented the receptionist edit card from animating its position upward/back by changing row/card layout animation to size-only.
+  - Delayed and gated the edit auto-scroll so it only runs when the expanded card is actually outside the visible viewport.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist shared transition reset:
+  - Removed `AnimatePresence/popLayout` from the receptionist summary/editor swap because it was interrupting reverse shared-element motion on Cancel.
+  - The row now switches summary/form in the same render cycle so avatar/name/branch/gender/hours/salary/status can animate both directions.
+  - Auto-scroll now only runs when the row top is hidden above the header, avoiding scroll-induced up/down movement when opening the form.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close video fix:
+  - Reviewed the close-only recording and restored `AnimatePresence` without `popLayout` so exiting form elements and entering row elements can be measured together.
+  - This keeps the opening behavior while allowing shared `layoutId` elements to animate back into the summary row on Cancel.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist two-phase close fix:
+  - Reworked Cancel into a two-phase close: the expanded card height is temporarily locked, the summary row enters its real position, and the exiting form is popped out of layout so it cannot push the row underneath it.
+  - After the shared-element return animation completes, the height lock is released and the parent edit state is cleared.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close ghost cleanup:
+  - Adjusted the Cancel flow so the summary row does not enter layout immediately; the edit form first hides non-shared fields, then shared avatar/name/branch/gender/hours/salary/status elements return to the row.
+  - Added closing-only fade-out behavior for extra form fields, errors, photo remove button, and action buttons to remove the ghost form effect while keeping the existing opening animation unchanged.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist exit layer ghost fix:
+  - Hid the exiting edit-form presence layer immediately during Cancel so the old form cannot visually re-close after the row has already returned.
+  - This keeps the existing opening animation path unchanged and only affects the form exit layer during close.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close height-collapse sync:
+  - Synced the expanded row height collapse with the summary-row return by animating the locked shell height down to the summary height during Cancel.
+  - Added a typed shell-collapse transition so the line should not return first and then show a second ghost-like form collapse.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-05 Receptionist close duration tuning:
+  - Slightly slowed the receptionist edit close sequence: non-shared field fade-out now lasts 0.22s, shell collapse lasts 0.56s, and the close cleanup timeout was extended to 920ms.
+  - Opening behavior was not changed.
+  - Verification: `npm run lint` passed. Docker was not used.
+- 2026-05-05 Teacher Finance table avatar fix:
+  - Added `profile_photo_file_id` to Teacher Finance records in backend domain/Postgres/memory store output.
+  - Frontend now resolves Teacher Finance profile-photo file ids to download URLs and renders them in the table avatar with initials fallback.
+  - Updated API contract/OpenAPI docs for the new Teacher Finance profile photo reference.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server` passed. Docker was not used.
+- 2026-05-05 Student & Assignment Hub:
+  - User requested merging Owner sidebar `Student Management` and `Assignment & Swap` into one `Student & Assignment Hub`.
+  - Decision: keep existing granular `/v1/students`, class enrollment, and assignment endpoints because they are still needed for create/detail/action workflows; add a new read-only hub list endpoint for the combined table.
+  - Backend: added `StudentAssignmentHubRecord/Page/Filter`, memory/Postgres store implementations, service validation, `GET /v1/student-assignment-hub`, and a migration allowing `graduated` while keeping `left` instead of `paused`.
+  - Frontend: merged Owner sidebar items into `Student & Assignment Hub`, added the hub page with branch/status/teacher/search filters, Teacher Finance-style filter chips, sticky table header, loading row, row-count selector, and 3-page pagination window.
+  - Actions column currently shows Edit and Quick Assign/Swap icons only; behavior is intentionally left for the next instruction.
+  - Updated `backend/api/openapi.yaml` and `backend/api/frontend-contract.md`.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-05 Owner UI polish:
+  - Increased Branch Management, Teacher Finance & HR, and Student & Assignment Hub primary add buttons to 38px height.
+  - Dashboard metric card icons now use Kingsway red in light and dark mode.
+  - Moved the AppShell profile menu from the header to the bottom of the sidebar while keeping the profile menu in sidebar-less onboarding screens.
+  - Sign Out hover/highlight now turns both the text and icon red.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-06 Owner login branch screen removal:
+  - Removed the Owner first-login branch setup / branch selection gate from the dashboard route.
+  - Owner `/dashboard/owner` now opens directly to the global dashboard with `All Branches` active; branches can still be created and managed from `Branch Management`.
+  - Sidebar Dashboard active state now works for the direct Owner dashboard URL without requiring `branch_id=all`.
+  - Verification: `npm run lint` and `npm run build` passed. Docker was not used.
+- 2026-05-06 Add Student flow:
+  - Connected `+ Add Student` in Student & Assignment Hub to `?view=student-add` and kept the sidebar item active on that form.
+  - Added the Add Student form UI with Add Teacher-style circular profile photo upload, name/surname, 7-character FIN, birth date, gender/address, phone, optional dynamic parent contacts, branch assignment, multi-course selection, per-course teacher/monthly payment, start date, email live availability, password visibility, Cancel, and Save.
+  - Backend student creation now supports profile fields, parent contacts, course registrations, optional direct teacher assignment, monthly payment per course, and student profile-photo file references; `PATCH /v1/students/{student_id}` is available for profile-photo updates after upload.
+  - Student Hub rows now resolve and render student profile photos when present; API contract/OpenAPI docs were updated for the Add Student payload.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, and `git diff --check` passed. Docker was not used.
+- 2026-05-06 Write integrity and multi-submit protection:
+  - Added backend idempotency support for authenticated JSON `POST` create/write endpoints via `Idempotency-Key`; repeated same key/body returns the first successful response, while same key with different body returns conflict.
+  - Added the `idempotency_keys` migration table and allowed `Idempotency-Key` in CORS.
+  - Student create is now transaction-backed for the student row, parent contacts, course registrations, and initial teacher assignment so a partial DB save does not survive a failure.
+  - Confirmed DB-level uniqueness for duplicate-sensitive rows such as student FIN and student/course registrations.
+  - Frontend create/save buttons now lock immediately on first click and forms send idempotency keys for Add Branch, Branch Detail room additions, Add/Edit Teacher salary creation, Add Student, and Receptionist create/edit flows.
+  - The UI still only treats a submit as successful after the backend returns success; otherwise the form stays open with the existing user-friendly error message.
+  - Verification: `npm run lint`, `npm run build`, `go test ./cmd/api-server`, targeted backend package tests, `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, and `git diff --check` passed. `go test ./...` was blocked only for `internal/files` by Windows Application Control policy. Docker was not used.
+- 2026-05-07 System verification:
+  - Rechecked current write-integrity status: idempotency and transaction protection are in place for current create/save flows, while full business state-machine rules still need to be added per critical module such as online exams, payments, attendance, and assignment/swap.
+  - Verification passed with Docker disabled: backend `go test ./...` using workspace `GOTMPDIR`, backend `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, frontend `npm run lint`, frontend `npm run build`, and `git diff --check`.
+- 2026-05-07 Backend startup migration fix:
+  - Fixed local backend startup by adding the missing Goose `-- +goose Up/Down` markers to `backend/migrations/202605060002_write_integrity_idempotency.sql`.
+  - Removed the redundant student/course unique-index creation from that migration because `202605060001_student_profile_registration_fields.sql` already defines `UNIQUE (student_id, course_id)`.
+  - Root cause of the terminal failure: the backend built successfully, but the startup migration runner rejected the idempotency migration before opening port `8080`.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go build -o ..\.runtime\backend-api-server.exe .\cmd\api-server`, frontend `npm run lint`, frontend `npm run build`, `git diff --check`, `tools/start-local-dev.ps1`, and `GET http://127.0.0.1:8080/healthz`.
+- 2026-05-07 Submit lock regression fix:
+  - Fixed Teacher edit, Branch Detail, Add Branch, Add Teacher, and Add Student submit buttons by replacing the copied immediate `onClick -> setLocked(true)` guard with shared `frontend/src/lib/forms/use-submit-lock.ts`.
+  - Root cause: the previous double-submit guard disabled the clicked submit button during the same click event, which could cancel the first browser form submit. The button then looked disabled while no backend request was sent.
+  - The new guard lets the first submit proceed, locks only after the browser has started submission, blocks rapid repeated clicks, and auto-unlocks if the form never enters pending state.
+  - Verification passed with Docker disabled: `npm run lint`, `npm run build`, `git diff --check`, and HTTP 200 checks for Teacher Finance and Branch Management dashboard pages.
+- 2026-05-07 One-command regression gate:
+  - Added root `check-kingsway.cmd`, which runs `tools/check-kingsway.ps1`.
+  - The check command now runs backend `go test ./...`, backend build, frontend `npm run lint`, frontend `npm run build`, `git diff --check`, local backend/frontend health checks, and Owner E2E smoke tests.
+  - Added Playwright with system Chrome/Edge channel support, `frontend/playwright.config.ts`, and `frontend/e2e/owner-smoke.spec.ts`.
+  - The Owner smoke test logs in as the default local owner, creates a temporary branch, verifies Branch Detail Save, creates and edits a teacher, creates a student, checks Student & Assignment Hub, and then deletes the temporary branch.
+  - Added `frontend/test-results/` and `frontend/playwright-report/` to `.gitignore`.
+  - Verification passed with Docker disabled: `.\check-kingsway.cmd` completed successfully.
+- 2026-05-07 Root Playwright cleanup:
+  - Removed the accidental root-level Playwright initialization created by `npm init playwright@latest`: root `node_modules/`, `tests/`, `.github/`, `package.json`, `package-lock.json`, and `playwright.config.ts`.
+  - Kept the real project Playwright setup under `frontend/`: `frontend/playwright.config.ts`, `frontend/e2e/`, `frontend/package.json`, `frontend/package-lock.json`, and `frontend/node_modules/`.
+  - Reverted the accidental root `.gitignore` additions from the Playwright initializer.
+  - Verification passed with Docker disabled: `.\check-kingsway.cmd -SkipE2E`.
+- 2026-05-07 Regression check load reduction:
+  - Changed `check-kingsway.cmd` to default to lightweight `quick` mode so routine checks no longer start the full app or run Playwright E2E.
+  - Added `-Mode standard` for backend unit/build + frontend lint + whitespace, and `-Mode full` for the existing heavy build/integration/E2E gate.
+  - The intended workflow is quick checks during normal edits, standard before larger handoff, and full only after completing a full module/menu or when chasing a regression.
+- 2026-05-07 Regression check ladder:
+  - Updated `check-kingsway.cmd -Mode standard` and `-Mode full` to run as a ladder: quick phase first, then standard-only additions, then full-only additions.
+  - Repeated exact checks are skipped when already completed in an earlier phase, such as backend build or frontend lint.
+  - New working rule: for tiny changes, do not run even quick checks automatically; run checks only when the change is risky, larger, explicitly requested, or before handoff.
+- 2026-05-08 Frontend stale dev cache recovery:
+  - Fixed the local startup path for the browser error `Cannot find module 'next-intl'`.
+  - Root cause: `next-intl` existed in `frontend/node_modules`, but the running Next dev server had a stale/broken `.next` Turbopack cache or old process.
+  - `tools/start-local-dev.ps1` now checks `http://127.0.0.1:3000/en/login` even when port 3000 is already open; if the current frontend is unhealthy, it stops the owned Next process, clears `frontend/.next`, and restarts frontend.
+  - Verification: local frontend `/en/login` returned 200 and rerunning `tools/start-local-dev.ps1` exited successfully without Docker.
+- 2026-05-08 Smoke test cleanup hardening:
+  - Updated `frontend/e2e/owner-smoke.spec.ts` so Owner smoke tests clean old and current `E2E Branch`, `E2E Replay`, and `E2E Concurrent` branch artifacts through the backend API.
+  - Cleanup now runs before the smoke test starts and again in `finally`, so failed/interrupted test runs are much less likely to leave test-created branches, students, teachers, rooms, files, or receptionists behind.
+  - This relies on backend branch delete cascading branch-owned data.
+  - Verification: targeted ESLint for `frontend/e2e/owner-smoke.spec.ts` passed. Full E2E was not run.
+- 2026-05-08 Add Student wizard redesign:
+  - Rebuilt Add Student as a dark glass, three-step wizard inspired by the provided screenshot: Personal Info, Academic Info, and Account Access.
+  - Kept the existing student profile photo upload path and form submission/backend contract; this is still the existing `standard` + `profile_photo` UI-avatar upload.
+  - Step navigation now uses Cancel, Back, and Next/Save controls while preserving entered values in the same form.
+  - Added EN JSON labels for the new wizard section/step text.
+  - Verification: targeted ESLint for `frontend/src/components/owner/add-student-form.tsx` passed, and a browser render smoke opened `/en/dashboard/owner?view=student-add` successfully with no console/page runtime errors. Full regression/E2E was not run.
+- 2026-05-10 Backend scalability preparation:
+  - Split `backend/internal/httpapi/server.go` into domain handler files for branch, student, teacher, academic, finance, files, and notifications.
+  - Split the large Postgres repository file into domain-specific store files while keeping shared scan helpers in `postgres.go`.
+  - Added a shared Postgres transaction helper and started using it in high-risk multi-step writes such as branch delete and student-with-details creation.
+  - Added audit log infrastructure: `audit_logs` migration, `domain.AuditLog`, Postgres `CreateAuditLog`, and generic HTTP write audit logging for successful authenticated POST/PATCH/PUT/DELETE requests.
+  - Extended idempotency to support no-body writes and added optional idempotency coverage to critical PATCH/DELETE paths such as branch, staff, teacher, student, room, and file writes. If the frontend sends `Idempotency-Key`, retry behavior is protected; if it does not, old behavior remains compatible.
+  - Added `-Module` support to `check-kingsway.cmd`, so checks can be scoped to `branch`, `teacher`, `student`, `receptionist`, `academic`, `finance`, `files`, `backend`, or `frontend`.
+  - Verification: backend API build passed and `tools/check-kingsway.ps1` parsed successfully. Direct Go test execution for `internal/httpapi` was blocked by Windows Application Control policy, not by a compile error.
+- 2026-05-11 Phase 1 security validation:
+  - Installed local validation tools with Scoop: `gcc` 15.2.0 and `golangci-lint` 2.12.2.
+  - Revalidated the security-lock changes for JWT secret hardening, DB-backed token validation, CORS allowlist, trusted-proxy client IP resolution, rate limiting, and audit/log redaction.
+  - Fixed lint-only cleanup in backend close handling and removed an unused audit helper so the validation gate is clean.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, and backend `golangci-lint run`.
+- 2026-05-11 Phase 1 security lock completion:
+  - Added JWT token-version revocation: tokens now carry a DB-backed token version, logout increments it, and old tokens are rejected. This intentionally invalidates older tokens that do not contain the new version claim.
+  - Added panic recovery middleware that returns a generic 500 response and logs sanitized request context plus stack metadata.
+  - Added Redis-backed distributed rate limiting for Postgres/Redis deployments with local in-memory fallback if Redis rate-limit calls fail at runtime.
+  - Hardened worker shutdown by returning worker completion channels and waiting for retention, outbox, notification, and RabbitMQ workers to stop before final HTTP shutdown.
+  - Added focused tests for token revocation and panic recovery.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, `golangci-lint run`, and `git diff --check`.
+- 2026-05-11 Phase 2.1 transaction model fix:
+  - Strengthened the Postgres store transaction helper with active-transaction context support.
+  - Routed store-level pool access through `queryRow`, `query`, and `exec` helpers so repository calls inside an active transaction use the same `pgx.Tx` instead of silently escaping atomicity.
+  - Converted the known student course registration validation path to use the active transaction instead of calling pool-backed helpers during the transaction.
+  - Verification passed with Docker disabled at that point: backend `go test ./...`, backend `go test -race ./...` with workspace `GOTMPDIR`, `golangci-lint run`, and `git diff --check`.
+- 2026-05-11 Phase 2.2 idempotency atomicity fix:
+  - Reworked idempotent JSON writes so the idempotency record and the business write run inside one Postgres transaction.
+  - Added `RunIdempotent`, which inserts the pending key, executes the business callback with the same transaction context, stores the completed response, and commits as one unit.
+  - Updated the store transaction helper so nested service/repository calls join the active transaction context instead of escaping to the pool.
+  - Updated idempotent HTTP handlers to pass the transaction context into service calls.
+  - Added integration coverage for rollback safety and replay safety.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `go test -race ./...` with `CGO_ENABLED=1`, and backend `golangci-lint run`.
+- 2026-05-11 GCC PATH bootstrap for race checks:
+  - GCC was already installed by Scoop at `D:\Dev\Scoop\apps\gcc\current\bin`, but the current Codex/PowerShell process had a stale PATH.
+  - Added a small path bootstrap to `tools/check-kingsway.ps1` so future checks automatically see Scoop GCC and shims when they exist.
+  - Verification passed with Docker disabled: `gcc --version` and backend `go test -race ./...`.
+- 2026-05-11 Phase 2 final consistency cleanup:
+  - Removed the old public idempotency API path from the HTTP contract: `BeginIdempotency`, `CompleteIdempotency`, `ClearIdempotency`, and `IdempotencyBeginResult` are no longer exposed/used inside backend production code.
+  - Kept a single safe write path through `RunIdempotent`, so future idempotent writes cannot accidentally split the business write and idempotency completion across separate transactions.
+  - Updated memory and Postgres stores to keep old helper logic private/internal only where needed.
+  - Fixed Postgres idempotency replay comparison by trimming the fixed-width `char(64)` request hash scanned from DB.
+  - Updated idempotency integration tests to validate only the atomic `RunIdempotent` flow, including rollback retry and committed response replay.
+  - Verification passed with Docker disabled: backend `go test ./...` using workspace `GOTMPDIR`, backend `go test -race ./...` with `CGO_ENABLED=1`, backend `golangci-lint run`, `git diff --check`, and `KINGSWAY_INTEGRATION=1 go test ./internal/integration` after local PostgreSQL was started.
+  - Phase 2 score: 8.5/10 for the current project stage. Remaining gap to 10 is not basic transaction/idempotency anymore; it is cross-system exactly-once behavior for external side effects such as MinIO/file writes and future payment/exam flows, which needs outbox/compensation and endpoint-by-endpoint production policy enforcement before live launch.
+- 2026-05-11 Phase 3.1 pagination hardening:
+  - Removed HTTP `writePagedJSON` memory slicing from list endpoints and replaced it with `parsePage` + paginated service/store calls.
+  - Added DB-backed `LIMIT/OFFSET` plus total count paths for branch, staff, student, teacher, teacher finance, course, class, class-student, assignment, room, schedule, exam, exam-result, payment, salary-model, file, and notification lists.
+  - Kept the existing API response shape for list endpoints: responses remain arrays with the existing `X-Total-Count`, `X-Limit`, and `X-Offset` headers.
+  - Added memory-store paginated equivalents for unit tests/dev store compatibility.
+  - Verification passed with Docker disabled: targeted backend package tests and full backend `go test ./...`.
+- 2026-05-11 Phase 3.2 hot path optimization:
+  - Reduced multipart upload memory pressure by parsing upload forms with a 1 MB in-memory threshold and cleaning multipart temp files after each request.
+  - Added a service-level upload read guard so direct file service calls cannot bypass the HTTP upload limit.
+  - Removed WebP MIME sniffing string conversions and pre-sized upload filename sanitization builders to avoid small repeated allocations.
+  - Verification passed with Docker disabled: `go test ./internal/files ./internal/httpapi` and `git diff --check` for the touched backend files.
+- 2026-05-11 Phase 3.3 performance validation:
+  - Read-only validation found the main list endpoints are now DB-paginated and upload memory is guarded.
+  - Remaining performance gaps are role-scoped fallback pagination in a few service paths, audit JSON marshal/unmarshal overhead on write requests, double buffering around upload-to-service handoff, and missing image dimension guard before profile photo decode.
+  - Phase 3 optimization score: 7.5/10.
+- 2026-05-11 Upload limit adjustment:
+  - Raised profile/file upload size from 10 MB to 15 MB across backend HTTP limit, file service guard, frontend photo validation, API contract, OpenAPI text, and user-facing EN messages.
+  - Raised Next.js Server Action body limit to 18 MB so 15 MB multipart uploads have enough request overhead room.
+- 2026-05-11 Phase 4.1 academic domain separation:
+  - Split the fat `academic.Store` interface into smaller domain store contracts: branch, staff, student, teacher, course, class, assignment, room, schedule, exam, and dashboard.
+  - Kept the public `NewService(store Store, authService AuthService)` constructor compatible while the service now holds domain-specific store fields internally.
+  - No business logic or HTTP/API contract changed.
+  - Verification passed with Docker disabled: `go test ./internal/academic`, `go test ./internal/httpapi ./cmd/api-server`, and `git diff --check` for the touched academic file.
+- 2026-05-11 Phase 4.2 package structure cleanup:
+  - Split the former 2300+ line `backend/internal/academic/service.go` god file into domain-oriented files: contracts, inputs, pagination, branch/staff, student, teacher, course/class/assignment, room, schedule, exam/dashboard, filters, and validation.
+  - Kept package name, exported service methods, constructor signature, and business behavior unchanged.
+  - `service.go` now only documents the package role; actual code is grouped by domain responsibility.
+  - Verification passed with Docker disabled: backend `go test ./...` and `git diff --check` for the touched academic/README files.
+- 2026-05-11 Phase 4.3 architecture validation:
+  - Coupling and maintainability were reviewed after Phase 4.1/4.2.
+  - Academic service boundaries are much cleaner: domain store interfaces are split and service code is grouped by branch/staff, student, teacher, room, schedule, exam/dashboard, filters, and validation.
+  - Remaining architecture gaps: `store/memory.go` is still large, some Postgres store files remain broad, HTTP middleware/server files still carry multiple concerns, and domain boundaries are improved by convention rather than fully enforced by package-level isolation.
+  - Phase 4 score: 7.5/10. This is enough for the current pre-meeting stage; reaching 10/10 would require stricter package isolation, smaller test/memory stores, service-level audit events, endpoint-specific contract enforcement, and broader module tests.
+- 2026-05-11 Phase 5.1 low-risk cleanup:
+  - Removed duplicated service pagination helpers by moving the shared fallback pagination behavior to `domain.PageSlice` and `domain.SinglePage`.
+  - Updated academic and finance fallback pagination call sites to use the shared domain helpers.
+  - Replaced the now-empty academic `service.go` package comment file with `doc.go`.
+  - No business logic or API contract changed.
+  - Verification passed with Docker disabled: backend `go test ./...`, backend `golangci-lint run`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 1 auth/session hardening:
+  - Wired frontend logout to backend `POST /v1/auth/logout` before clearing the local auth cookie, so backend token-version revocation is used.
+  - Added a local `/api/auth/clear-session` route to delete stale/invalid auth cookies and redirect back to login with an expired-session marker.
+  - Updated dashboard session guard to use the clear-session route when a cookie exists but backend session validation fails.
+  - Hardened proxy login handling so `?session=expired` can clear stale cookies instead of bouncing back to dashboard.
+  - Added the shared submit lock to the login form submit button to reduce rapid/double submit risk.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 2 API/action consistency:
+  - Extended frontend API helpers so critical PATCH/DELETE calls can forward `Idempotency-Key` consistently.
+  - Added idempotency keys to branch detail save/delete, teacher delete, receptionist delete, staff update/delete, branch room update/delete, and photo-delete follow-up actions.
+  - Changed create flows so optional profile-photo follow-up failures do not present an already-created branch/staff/teacher/student as a failed core registration.
+  - Reordered student creation so the student account is created before optional photo follow-up work.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 3 performance pass:
+  - Stopped the owner dashboard route from loading branch photos and per-branch dashboard stats for every owner view.
+  - Branch photos are now loaded only for Branch Management and the main dashboard, and branch stats are loaded only for Branch Management.
+  - Parallelized Branch Management data loading for branch photos, stats, rooms, and staff lists.
+  - Optimized Add Student course/teacher rendering by grouping active teachers by branch/subject once instead of filtering/parsing teacher subjects for each selected course render.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 4 component architecture cleanup:
+  - Added shared owner form primitives under `frontend/src/components/owner/shared`: profile photo upload avatar, email availability status, and locked submit button.
+  - Rewired Add Teacher and Add Student forms to use the shared primitives without changing their behavior or API payloads.
+  - Reduced `add-teacher-form.tsx` and `add-student-form.tsx` duplication, making future registration forms less likely to diverge.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-12 Frontend Phase 5 cleanup:
+  - Removed the legacy Branch Detail staff-management UI block that had already been moved to Receptionist Management and was kept only behind an eslint unused-code suppression.
+  - Removed the now-unused staff create/edit/delete imports and local staff form helpers from `branch-management-view.tsx`.
+  - Moved duplicate `DD/MM/YYYY` input formatting into `frontend/src/lib/forms/date-format.ts` and reused it from Add Student and Receptionist Management.
+  - Reduced `branch-management-view.tsx` from about 77 KB to about 60 KB without changing active Branch Management behavior.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend large-component/image follow-up:
+  - Replaced remaining direct `<img>` usage in owner UI with the shared `ObjectCoverImage`/`next/image` wrapper.
+  - Split low-risk owner UI pieces out of large files: Add Student wizard parts, Branch Management table/stat parts, and Receptionist status/email helper parts.
+  - Current large-file sizes: `branch-management-view.tsx` ~56.9 KB, `receptionist-management-view.tsx` ~44.4 KB, `add-student-form.tsx` ~24.0 KB.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend theme token pass:
+  - Moved component/app hardcoded hex colors into Tailwind theme tokens in `frontend/src/app/globals.css`.
+  - Replaced component/app arbitrary theme classes such as `bg-[#...]`, `text-[#...]`, `border-[#...]`, `ring-[#...]`, `accent-[#...]`, `stroke-[#...]`, `shadow-[...]`, direct hex style values, and local gradient classes with token/utility classes.
+  - Current audit result for `frontend/src/components` and `frontend/src/app`: no direct `#RRGGBB` color literals in `.tsx`, and no `bg-[...]`, `text-[...]`, `border-[...]`, `shadow-[...]`, `drop-shadow-[...]`, or `ring-[#...]` theme classes remain.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `git diff --check`.
+- 2026-05-13 Frontend owner component split pass:
+  - Split Branch Detail and its room/save helpers into `branch-detail-page.tsx`, leaving `branch-management-view.tsx` focused on branch list/create/delete orchestration.
+  - Split Receptionist create/edit form into `receptionist-staff-editor.tsx`, leaving `receptionist-management-view.tsx` focused on branch filtering, receptionist list rows, animation shell, and delete flow.
+  - Current owner file sizes: `branch-management-view.tsx` ~31.9 KB, `branch-detail-page.tsx` ~26.3 KB, `receptionist-management-view.tsx` ~23.0 KB, `receptionist-staff-editor.tsx` ~22.5 KB.
+  - Client component boundary count remains 30; extracted files are imported through existing client components rather than adding new top-level client boundaries.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, and `git diff --check`.
+- 2026-05-13 Frontend verification hang check:
+  - Checked for lingering `node`/`npm` processes after a prior parallel lint/build run appeared stuck; no active Node/npm process remained.
+  - Re-ran frontend verification sequentially to avoid terminal/session contention.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
+- 2026-05-13 Frontend independent audit:
+  - Re-scanned frontend from current code state, independent of previous scoring.
+  - Verification passed with Docker disabled: frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, and `git diff --check`.
+  - Current audit positives: no direct `<img>` usage in `frontend/src`, no direct `#RRGGBB` color literals in TS/TSX, no `bg-[#...]`/`text-[#...]`/`border-[#...]` theme classes remain, and critical write actions use idempotency keys.
+  - Current audit gaps: several medium-large owner/client components remain, frontend E2E coverage is still smoke-level, full responsive/WCAG browser audit is not complete, and `npm audit --audit-level=high` reports high advisories through `next@16.2.4`.
+  - Current frontend score: 8.1/10. Live-prep work to reach 10/10: dependency security update, broader E2E regression, accessibility/responsive pass, deeper component split, and production observability.
+- 2026-05-13 Pre-large-update baseline work:
+  - Added DB migration discipline documentation and `tools/check-db-migrations.ps1`; `tools/check-kingsway.ps1` now runs this guard when migrations/tooling are touched.
+  - Added current DB schema snapshot at `backend/docs/schema-snapshot-2026-05-13.md`, based on migrations through `202605110001_user_token_version.sql`.
+  - Added workflow/state-machine readiness notes at `backend/docs/workflow-state-readiness.md` without locking final states before the owner meeting.
+  - Updated API baseline by adding `backend/api/baseline-2026-05-13.md` and documenting missing auth endpoints (`POST /v1/auth/logout`, `GET /v1/users/email-availability`) in OpenAPI/frontend contract.
+  - Updated frontend Next packages to `next@16.2.6` and `eslint-config-next@16.2.6`; high-severity npm audit findings are clear, while a moderate Next-bundled PostCSS advisory remains because npm's suggested fix is breaking/downgrading.
+  - Added provider-neutral frontend client error telemetry: browser errors, unhandled promise rejections, and dashboard error-boundary errors post sanitized payloads to `/api/telemetry/client-error`.
+  - Verification passed with Docker disabled: DB migration check, frontend `npm run lint`, `npx tsc --noEmit`, `npm run build`, root quick check, and `npm audit --audit-level=high`.
 
 ## Next Steps
 
-1. Continue frontend implementation from the role dashboard shell.
-2. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
-3. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.
+1. If strict WebP storage is required for profile photos, replace the current JPEG profile-photo encoder with a backend WebP encoder and update the existing file optimizer tests.
+2. Continue backend hardening by gradually converting the remaining manual transaction blocks to the shared helper and adding service-level audit events for sensitive actions such as salary changes and destructive deletes.
+3. Implement Student & Assignment Hub action buttons: Edit and Quick Assign/Swap behavior.
+4. Expand role-specific dashboard widgets and list/detail workflows against `backend/api/frontend-contract.md` and `backend/api/openapi.yaml`.
+5. When external providers are chosen, add notification delivery channels and persistent delivery/audit records.

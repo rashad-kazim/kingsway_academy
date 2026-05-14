@@ -69,6 +69,166 @@ func TestBranchIsolationAndTeacherResultOwnership(t *testing.T) {
 	}
 }
 
+func TestOwnerCanUpdateBranchProfileFields(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := store.NewMemory()
+	service := academic.NewService(repo, nil)
+	branch, err := repo.CreateBranch(ctx, domain.Branch{Name: "Old", Slug: "old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := service.UpdateBranch(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, academic.UpdateBranchInput{
+		ID:          branch.ID,
+		Name:        "New Campus",
+		Slug:        "new-campus",
+		Address:     "Main street",
+		OpeningTime: "09:00",
+		ClosingTime: "21:00",
+	})
+	if err != nil {
+		t.Fatalf("unexpected update error: %v", err)
+	}
+
+	if updated.Name != "New Campus" || updated.Slug != "new-campus" || updated.Address != "Main street" {
+		t.Fatalf("branch profile fields were not updated: %#v", updated)
+	}
+	if updated.OpeningTime != "09:00" || updated.ClosingTime != "21:00" {
+		t.Fatalf("operational hours were not updated: %#v", updated)
+	}
+}
+
+func TestUpdateBranchRequiresOwnerAndValidHours(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := store.NewMemory()
+	service := academic.NewService(repo, nil)
+	branch, err := repo.CreateBranch(ctx, domain.Branch{Name: "Main", Slug: "main-update-rbac"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.UpdateBranch(ctx, domain.Principal{UserID: "reception", BranchID: branch.ID, Role: domain.RoleReceptionist}, academic.UpdateBranchInput{
+		ID:          branch.ID,
+		Name:        "Denied",
+		Slug:        "denied",
+		OpeningTime: "09:00",
+		ClosingTime: "21:00",
+	})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected receptionist branch update forbidden error, got %v", err)
+	}
+
+	_, err = service.UpdateBranch(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, academic.UpdateBranchInput{
+		ID:          branch.ID,
+		Name:        "Invalid",
+		Slug:        "invalid",
+		OpeningTime: "9am",
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected invalid hour input error, got %v", err)
+	}
+}
+
+func TestOwnerCanDeleteBranchAndCascadeData(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := store.NewMemory()
+	service := academic.NewService(repo, nil)
+	data := seedAcademicAccessData(t, ctx, repo)
+
+	deleted, err := service.DeleteBranch(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, data.branch.ID)
+	if err != nil {
+		t.Fatalf("unexpected delete error: %v", err)
+	}
+	if deleted.ID != data.branch.ID {
+		t.Fatalf("unexpected deleted branch: %#v", deleted)
+	}
+	if _, err := repo.GetBranch(ctx, data.branch.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected deleted branch to be gone, got %v", err)
+	}
+
+	branches, err := service.ListBranches(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(branches) != 1 {
+		t.Fatalf("expected only other branch to remain, got %#v", branches)
+	}
+
+	students, err := service.ListStudents(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, data.branch.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(students) != 0 {
+		t.Fatalf("expected deleted branch students to be removed, got %#v", students)
+	}
+	rooms, err := service.ListRooms(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, data.branch.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("expected deleted branch rooms to be removed, got %#v", rooms)
+	}
+}
+
+func TestDeleteBranchRequiresOwner(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := store.NewMemory()
+	service := academic.NewService(repo, nil)
+	branch, err := repo.CreateBranch(ctx, domain.Branch{Name: "Main", Slug: "delete-rbac"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.DeleteBranch(ctx, domain.Principal{UserID: "reception", BranchID: branch.ID, Role: domain.RoleReceptionist}, branch.ID)
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected receptionist branch delete forbidden error, got %v", err)
+	}
+}
+
+func TestRemoveRoomDeactivatesAndHidesRoom(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := store.NewMemory()
+	service := academic.NewService(repo, nil)
+	branch, err := repo.CreateBranch(ctx, domain.Branch{Name: "Main", Slug: "room-main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := service.CreateRoom(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, academic.CreateRoomInput{
+		BranchID: branch.ID,
+		Name:     "Room 101",
+		Capacity: 12,
+	})
+	if err != nil {
+		t.Fatalf("unexpected room create error: %v", err)
+	}
+
+	removed, err := service.RemoveRoom(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, room.ID)
+	if err != nil {
+		t.Fatalf("unexpected room remove error: %v", err)
+	}
+	if removed.IsActive {
+		t.Fatalf("expected removed room to be inactive: %#v", removed)
+	}
+
+	rooms, err := service.ListRooms(ctx, domain.Principal{UserID: "owner", Role: domain.RoleOwner}, branch.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("inactive room should be hidden from list, got %#v", rooms)
+	}
+}
+
 type academicAccessData struct {
 	branch                  domain.Branch
 	teacherPrincipal        domain.Principal

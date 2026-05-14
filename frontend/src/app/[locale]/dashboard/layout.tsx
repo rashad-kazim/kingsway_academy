@@ -1,5 +1,4 @@
 import { setRequestLocale } from "next-intl/server";
-import { AppShell } from "@/components/layout/app-shell";
 import { requireAuthContext } from "@/lib/auth/session";
 
 type DashboardLayoutProps = {
@@ -17,11 +16,7 @@ export default async function DashboardLayout({
 }: DashboardLayoutProps) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const { session } = await requireAuthContext(locale);
+  await requireAuthContext(locale);
 
-  return (
-    <AppShell locale={locale} session={session}>
-      {children}
-    </AppShell>
-  );
+  return children;
 }

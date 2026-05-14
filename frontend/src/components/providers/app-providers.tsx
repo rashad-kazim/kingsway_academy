@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState, type ReactNode } from "react";
+import { ClientTelemetry } from "@/components/providers/client-telemetry";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -32,6 +33,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       enableSystem
     >
       <QueryClientProvider client={queryClient}>
+        <ClientTelemetry />
         <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
         <Toaster richColors closeButton />
       </QueryClientProvider>

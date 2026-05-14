@@ -15,8 +15,10 @@ type Config struct {
 	DataStore     string `env:"DATA_STORE" envDefault:"postgres"`
 	RunMigrations bool   `env:"RUN_MIGRATIONS" envDefault:"true"`
 
-	RateLimitEnabled   bool `env:"RATE_LIMIT_ENABLED" envDefault:"true"`
-	RateLimitPerMinute int  `env:"RATE_LIMIT_PER_MINUTE" envDefault:"600"`
+	RateLimitEnabled   bool   `env:"RATE_LIMIT_ENABLED" envDefault:"true"`
+	RateLimitPerMinute int    `env:"RATE_LIMIT_PER_MINUTE" envDefault:"600"`
+	CORSAllowedOrigins string `env:"CORS_ALLOWED_ORIGINS" envDefault:"http://127.0.0.1:3000,http://localhost:3000"`
+	TrustedProxyCIDRs  string `env:"TRUSTED_PROXY_CIDRS" envDefault:""`
 
 	PostgresHost     string `env:"POSTGRES_HOST" envDefault:"localhost"`
 	PostgresPort     int    `env:"POSTGRES_PORT" envDefault:"5432"`
@@ -48,6 +50,7 @@ type Config struct {
 	PaymentReminderHorizonDays      int  `env:"PAYMENT_REMINDER_HORIZON_DAYS" envDefault:"7"`
 	FileRetentionNoticeIntervalSecs int  `env:"FILE_RETENTION_NOTICE_INTERVAL_SECONDS" envDefault:"21600"`
 	FileRetentionNoticeHorizonDays  int  `env:"FILE_RETENTION_NOTICE_HORIZON_DAYS" envDefault:"7"`
+	WorkerShutdownTimeoutSeconds    int  `env:"WORKER_SHUTDOWN_TIMEOUT_SECONDS" envDefault:"10"`
 }
 
 func Load() (Config, error) {
@@ -78,7 +81,7 @@ func loadDotEnv(path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

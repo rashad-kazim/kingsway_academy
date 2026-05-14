@@ -24,6 +24,16 @@ export default function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (
+    isLogin &&
+    token &&
+    request.nextUrl.searchParams.get("session") === "expired"
+  ) {
+    const response = intlProxy(request);
+    response.cookies.delete(AUTH_COOKIE);
+    return response;
+  }
+
   if (isLogin && token) {
     const url = request.nextUrl.clone();
     url.pathname = `/${localized.locale}/dashboard`;

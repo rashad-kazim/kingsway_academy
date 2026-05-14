@@ -12,32 +12,33 @@ Go backend workspace for the Kingsway Operation Center.
 
 ## Infrastructure
 
-For the complete local app, run the root Compose file from the project root:
+Docker usage is currently paused for day-to-day development. The root `start-kingsway.cmd` script now starts the frontend, backend, and local infrastructure without Docker.
 
-```bash
-docker compose up -d --build
-```
+For the backend to run with `DATA_STORE=postgres`, the root starter brings up these local/native services:
 
-On Windows, the root `start-kingsway.cmd` script runs the same command and `stop-kingsway.cmd` stops containers without deleting data.
+- PostgreSQL on `localhost:5432`
+- Redis on `localhost:6379`
+- RabbitMQ on `localhost:5672`
+- MinIO on `localhost:9000`
 
-That starts the frontend, API, PostgreSQL, Redis, RabbitMQ, and MinIO together.
+Local data/logs are stored in the root `.runtime/` folder. `backend/.env` is created automatically when missing.
 
-Backend-only dependencies are defined in this folder's `docker-compose.yml`:
+Backend-only Docker dependencies are still defined in this folder's `docker-compose.yml` for later use only:
 
 - PostgreSQL for service schemas.
 - Redis for cached salary and dashboard results.
 - RabbitMQ for event-driven finance/file/notification workflows.
 - MinIO for self-hosted S3-compatible storage.
 
-Docker/local infrastructure is active for backend development. The API defaults to PostgreSQL persistence and also connects to Redis, RabbitMQ, and MinIO when `DATA_STORE=postgres`.
+The API defaults to PostgreSQL persistence and also connects to Redis, RabbitMQ, and MinIO when `DATA_STORE=postgres`.
 
-Start backend infra only with:
+Docker compose files are retained only for later use if Docker is explicitly re-enabled. Do not use this during the current local workflow:
 
 ```bash
 docker compose up -d
 ```
 
-Copy `.env.example` to `.env` before running services.
+The root starter creates `backend/.env` from local defaults when it is missing.
 
 ## Current Backend Foundation
 
@@ -54,16 +55,26 @@ Copy `.env.example` to `.env` before running services.
 
 ## Runnable API
 
-For day-to-day full-stack development, prefer the root command:
+For day-to-day full-stack development while Docker is paused, prefer the root command:
 
 ```bash
-docker compose up -d --build
+start-kingsway.cmd
 ```
 
-The backend also supports running manually against the local Docker infrastructure:
+Default local owner login after first start:
+
+- Email: `owner@kingsway.local`
+- Password: `Kingsway123!`
+
+Stop all local processes started by the root script:
 
 ```bash
-docker compose up -d
+stop-kingsway.cmd
+```
+
+The backend also supports running manually against local/native infrastructure:
+
+```bash
 go run ./cmd/api-server
 ```
 

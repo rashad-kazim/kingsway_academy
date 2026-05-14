@@ -2,13 +2,64 @@ package domain
 
 import "time"
 
+type IdempotencyStatus string
+
+const (
+	IdempotencyStatusPending   IdempotencyStatus = "pending"
+	IdempotencyStatusCompleted IdempotencyStatus = "completed"
+)
+
+type IdempotencyRecord struct {
+	ActorUserID    string            `json:"actor_user_id"`
+	Method         string            `json:"method"`
+	Path           string            `json:"path"`
+	Key            string            `json:"key"`
+	RequestHash    string            `json:"request_hash"`
+	Status         IdempotencyStatus `json:"status"`
+	ResponseStatus int               `json:"response_status"`
+	ResponseBody   []byte            `json:"response_body"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
+	ExpiresAt      time.Time         `json:"expires_at"`
+}
+
+type IdempotencyRunResult struct {
+	Replayed       bool   `json:"replayed"`
+	ResponseStatus int    `json:"response_status"`
+	ResponseBody   []byte `json:"response_body"`
+}
+
+type PageRequest struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+type AuditLog struct {
+	ID             string         `json:"id"`
+	ActorUserID    string         `json:"actor_user_id,omitempty"`
+	ActorRole      Role           `json:"actor_role"`
+	ActorBranchID  string         `json:"actor_branch_id,omitempty"`
+	Action         string         `json:"action"`
+	EntityType     string         `json:"entity_type"`
+	EntityID       string         `json:"entity_id,omitempty"`
+	EntityBranchID string         `json:"entity_branch_id,omitempty"`
+	RequestID      string         `json:"request_id,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	BeforeJSON     map[string]any `json:"before_json,omitempty"`
+	AfterJSON      map[string]any `json:"after_json,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
 type Branch struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Address   string    `json:"address,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Address     string    `json:"address,omitempty"`
+	OpeningTime string    `json:"opening_time,omitempty"`
+	ClosingTime string    `json:"closing_time,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type User struct {
@@ -20,8 +71,31 @@ type User struct {
 	FirstName    string    `json:"first_name"`
 	LastName     string    `json:"last_name"`
 	IsActive     bool      `json:"is_active"`
+	TokenVersion int       `json:"-"`
+	LastLoginAt  string    `json:"last_login_at,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type StaffMember struct {
+	ID                 string    `json:"id"`
+	BranchID           string    `json:"branch_id"`
+	UserID             string    `json:"user_id"`
+	Role               Role      `json:"role"`
+	Email              string    `json:"email"`
+	FirstName          string    `json:"first_name"`
+	LastName           string    `json:"last_name"`
+	BirthDate          string    `json:"birth_date,omitempty"`
+	Gender             string    `json:"gender,omitempty"`
+	Phone              string    `json:"phone,omitempty"`
+	Address            string    `json:"address,omitempty"`
+	HiredAt            string    `json:"hired_at,omitempty"`
+	SalaryAmountAZN    int       `json:"salary_amount_azn"`
+	ProfilePhotoFileID string    `json:"profile_photo_file_id,omitempty"`
+	IsActive           bool      `json:"is_active"`
+	LastLoginAt        string    `json:"last_login_at,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type Principal struct {
@@ -41,21 +115,94 @@ func (p Principal) CanUseBranch(branchID string) bool {
 type StudentStatus string
 
 const (
-	StudentStatusActive StudentStatus = "active"
-	StudentStatusLeft   StudentStatus = "left"
+	StudentStatusActive    StudentStatus = "active"
+	StudentStatusGraduated StudentStatus = "graduated"
+	StudentStatusLeft      StudentStatus = "left"
 )
 
 type Student struct {
-	ID         string        `json:"id"`
-	BranchID   string        `json:"branch_id"`
-	UserID     string        `json:"user_id,omitempty"`
-	FIN        FIN           `json:"fin"`
-	FirstName  string        `json:"first_name"`
-	LastName   string        `json:"last_name"`
-	Status     StudentStatus `json:"status"`
-	LeftReason string        `json:"left_reason,omitempty"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
+	ID                 string        `json:"id"`
+	BranchID           string        `json:"branch_id"`
+	UserID             string        `json:"user_id,omitempty"`
+	FIN                FIN           `json:"fin"`
+	FirstName          string        `json:"first_name"`
+	LastName           string        `json:"last_name"`
+	BirthDate          string        `json:"birth_date,omitempty"`
+	Gender             string        `json:"gender,omitempty"`
+	Phone              string        `json:"phone,omitempty"`
+	Address            string        `json:"address,omitempty"`
+	ProfilePhotoFileID string        `json:"profile_photo_file_id,omitempty"`
+	Status             StudentStatus `json:"status"`
+	LeftReason         string        `json:"left_reason,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+}
+
+type StudentParentContact struct {
+	ID        string    `json:"id"`
+	BranchID  string    `json:"branch_id"`
+	StudentID string    `json:"student_id"`
+	Relation  string    `json:"relation"`
+	Name      string    `json:"name"`
+	Phones    []string  `json:"phones"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type StudentCourseRegistration struct {
+	ID                 string    `json:"id"`
+	BranchID           string    `json:"branch_id"`
+	StudentID          string    `json:"student_id"`
+	CourseID           string    `json:"course_id"`
+	TeacherID          string    `json:"teacher_id,omitempty"`
+	MonthlyAmountCents int64     `json:"monthly_amount_cents"`
+	StartDate          string    `json:"start_date"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+type StudentTeacherAssignment struct {
+	ID        string    `json:"id"`
+	BranchID  string    `json:"branch_id"`
+	StudentID string    `json:"student_id"`
+	TeacherID string    `json:"teacher_id"`
+	ClassID   string    `json:"class_id,omitempty"`
+	ValidFrom string    `json:"valid_from"`
+	ValidTo   string    `json:"valid_to,omitempty"`
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type StudentAssignmentHubFilter struct {
+	BranchID  string        `json:"branch_id,omitempty"`
+	Status    StudentStatus `json:"status,omitempty"`
+	TeacherID string        `json:"teacher_id,omitempty"`
+	Query     string        `json:"q,omitempty"`
+	Limit     int           `json:"limit"`
+	Offset    int           `json:"offset"`
+}
+
+type StudentAssignmentHubPage struct {
+	Items  []StudentAssignmentHubRecord `json:"items"`
+	Total  int                          `json:"total"`
+	Limit  int                          `json:"limit"`
+	Offset int                          `json:"offset"`
+}
+
+type StudentAssignmentHubRecord struct {
+	ID                     string        `json:"id"`
+	BranchID               string        `json:"branch_id"`
+	BranchName             string        `json:"branch_name"`
+	UserID                 string        `json:"user_id,omitempty"`
+	FIN                    FIN           `json:"fin"`
+	FirstName              string        `json:"first_name"`
+	LastName               string        `json:"last_name"`
+	ProfilePhotoFileID     string        `json:"profile_photo_file_id,omitempty"`
+	Status                 StudentStatus `json:"status"`
+	ActiveTeacherID        string        `json:"active_teacher_id,omitempty"`
+	ActiveTeacherFirstName string        `json:"active_teacher_first_name,omitempty"`
+	ActiveTeacherLastName  string        `json:"active_teacher_last_name,omitempty"`
+	RegisteredAt           time.Time     `json:"registered_at"`
+	CreatedAt              time.Time     `json:"created_at"`
+	UpdatedAt              time.Time     `json:"updated_at"`
 }
 
 type TeacherStatus string
@@ -67,12 +214,35 @@ const (
 )
 
 type Teacher struct {
-	ID        string        `json:"id"`
-	BranchID  string        `json:"branch_id"`
-	UserID    string        `json:"user_id"`
-	Status    TeacherStatus `json:"status"`
-	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	ID                 string        `json:"id"`
+	BranchID           string        `json:"branch_id"`
+	UserID             string        `json:"user_id"`
+	Status             TeacherStatus `json:"status"`
+	BirthDate          string        `json:"birth_date,omitempty"`
+	Gender             string        `json:"gender,omitempty"`
+	Phone              string        `json:"phone,omitempty"`
+	Address            string        `json:"address,omitempty"`
+	ProfilePhotoFileID string        `json:"profile_photo_file_id,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+}
+
+type TeacherFinanceRecord struct {
+	ID                          string          `json:"id"`
+	BranchID                    string          `json:"branch_id"`
+	BranchName                  string          `json:"branch_name"`
+	UserID                      string          `json:"user_id"`
+	Email                       string          `json:"email"`
+	FirstName                   string          `json:"first_name"`
+	LastName                    string          `json:"last_name"`
+	ProfilePhotoFileID          string          `json:"profile_photo_file_id,omitempty"`
+	Subject                     string          `json:"subject"`
+	Status                      TeacherStatus   `json:"status"`
+	SalaryType                  SalaryModelType `json:"salary_type,omitempty"`
+	AssignedStudents            int             `json:"assigned_students"`
+	CalculatedSalaryAmountCents int64           `json:"calculated_salary_amount_cents"`
+	CreatedAt                   time.Time       `json:"created_at"`
+	UpdatedAt                   time.Time       `json:"updated_at"`
 }
 
 type Course struct {
@@ -257,6 +427,7 @@ type FileObject struct {
 	OwnerType         string       `json:"owner_type"`
 	OwnerID           string       `json:"owner_id"`
 	Category          FileCategory `json:"category"`
+	Policy            FilePolicy   `json:"policy"`
 	Purpose           FilePurpose  `json:"purpose"`
 	OriginalFilename  string       `json:"original_filename"`
 	MimeType          string       `json:"mime_type"`

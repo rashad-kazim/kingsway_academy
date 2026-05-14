@@ -28,7 +28,7 @@ func (p *TopicPublisher) EnsureExchange(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	done := make(chan error, 1)
 	go func() {
@@ -65,7 +65,7 @@ func (p *TopicPublisher) PublishJSON(ctx context.Context, topic string, body []b
 	if err != nil {
 		return err
 	}
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	return ch.PublishWithContext(ctx, p.exchange, topic, false, false, amqp.Publishing{
 		ContentType:  "application/json",
@@ -88,43 +88,45 @@ func NewTopicConsumer(conn *amqp.Connection, exchange string, queue string, bind
 	return &TopicConsumer{conn: conn, exchange: exchange, queue: queue, bindings: bindings}
 }
 
-func (c *TopicConsumer) Start(ctx context.Context, handler EventHandler, log *zap.Logger) error {
+func (c *TopicConsumer) Start(ctx context.Context, handler EventHandler, log *zap.Logger) (<-chan struct{}, error) {
 	if log == nil {
 		log = zap.NewNop()
 	}
 	ch, err := c.conn.Channel()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := ch.ExchangeDeclare(c.exchange, "topic", true, false, false, false, nil); err != nil {
 		_ = ch.Close()
-		return err
+		return nil, err
 	}
 	queue, err := ch.QueueDeclare(c.queue, true, false, false, false, nil)
 	if err != nil {
 		_ = ch.Close()
-		return err
+		return nil, err
 	}
 	for _, binding := range c.bindings {
 		if err := ch.QueueBind(queue.Name, binding, c.exchange, false, nil); err != nil {
 			_ = ch.Close()
-			return err
+			return nil, err
 		}
 	}
 	if err := ch.Qos(10, 0, false); err != nil {
 		_ = ch.Close()
-		return err
+		return nil, err
 	}
 
 	deliveries, err := ch.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
 		_ = ch.Close()
-		return err
+		return nil, err
 	}
 
+	done := make(chan struct{})
 	go func() {
-		defer ch.Close()
+		defer close(done)
+		defer func() { _ = ch.Close() }()
 		for {
 			select {
 			case <-ctx.Done():
@@ -146,5 +148,5 @@ func (c *TopicConsumer) Start(ctx context.Context, handler EventHandler, log *za
 		}
 	}()
 
-	return nil
+	return done, nil
 }

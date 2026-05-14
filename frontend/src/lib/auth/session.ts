@@ -38,7 +38,7 @@ export async function requireAuthContext(locale: string): Promise<AuthContext> {
 
   const session = await currentSession();
   if (!session) {
-    redirect(`/${locale}/login`);
+    redirect(`/api/auth/clear-session?locale=${encodeURIComponent(locale)}`);
   }
 
   return { token, session };

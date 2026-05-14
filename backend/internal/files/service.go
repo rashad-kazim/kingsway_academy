@@ -1,12 +1,15 @@
 package files
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +24,7 @@ type Store interface {
 	RegisterFile(ctx context.Context, file domain.FileObject) (domain.FileObject, error)
 	GetFile(ctx context.Context, id string) (domain.FileObject, error)
 	ListFiles(ctx context.Context, branchID string) ([]domain.FileObject, error)
+	ListFilesPage(ctx context.Context, branchID string, ownerType string, ownerID string, purpose domain.FilePurpose, page domain.PageRequest) ([]domain.FileObject, int, error)
 	ListExpiredFiles(ctx context.Context, now time.Time, limit int) ([]domain.FileObject, error)
 	MarkFileDeleted(ctx context.Context, id string, deletedAt time.Time) (domain.FileObject, error)
 }
@@ -43,6 +47,8 @@ type Service struct {
 	specialBucket  string
 }
 
+const maxUploadContentBytes int64 = 15 << 20
+
 type Option func(*Service)
 
 func WithObjectStorage(storage ObjectStorage, standardBucket string, specialBucket string) Option {
@@ -64,6 +70,7 @@ type RegisterFileInput struct {
 	OwnerType         string              `json:"owner_type"`
 	OwnerID           string              `json:"owner_id"`
 	Category          domain.FileCategory `json:"category"`
+	Policy            domain.FilePolicy   `json:"policy"`
 	Purpose           domain.FilePurpose  `json:"purpose"`
 	OriginalFilename  string              `json:"original_filename"`
 	MimeType          string              `json:"mime_type"`
@@ -79,6 +86,7 @@ type UploadFileInput struct {
 	OwnerType        string
 	OwnerID          string
 	Category         domain.FileCategory
+	Policy           domain.FilePolicy
 	Purpose          domain.FilePurpose
 	OriginalFilename string
 	MimeType         string
@@ -125,6 +133,12 @@ func (s *Service) RegisterFile(ctx context.Context, actor domain.Principal, inpu
 	if input.Purpose == domain.FilePurposeExamWriting && actor.Role != domain.RoleTeacher && actor.Role != domain.RoleOwner {
 		return domain.FileObject{}, domain.ErrForbidden
 	}
+	policy, category, err := normalizeUploadPolicy(input.Policy, input.Category, input.Purpose)
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	input.Policy = policy
+	input.Category = category
 	if input.Category == domain.FileCategorySpecial && actor.Role == domain.RoleTeacher {
 		return domain.FileObject{}, domain.ErrForbidden
 	}
@@ -135,6 +149,7 @@ func (s *Service) RegisterFile(ctx context.Context, actor domain.Principal, inpu
 		OwnerType:         strings.TrimSpace(input.OwnerType),
 		OwnerID:           strings.TrimSpace(input.OwnerID),
 		Category:          input.Category,
+		Policy:            input.Policy,
 		Purpose:           input.Purpose,
 		OriginalFilename:  strings.TrimSpace(input.OriginalFilename),
 		MimeType:          strings.TrimSpace(input.MimeType),
@@ -156,7 +171,7 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 	if s.storage == nil {
 		return domain.FileObject{}, domain.ErrInvalidInput
 	}
-	if input.Content == nil || input.Size < 0 {
+	if input.Content == nil || input.Size < 0 || input.Size > maxUploadContentBytes {
 		return domain.FileObject{}, domain.ErrInvalidInput
 	}
 	if err := auth.RequireAnyRole(actor, domain.RoleOwner, domain.RoleReceptionist, domain.RoleTeacher); err != nil {
@@ -171,6 +186,12 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 	if input.Purpose == domain.FilePurposeExamWriting && actor.Role != domain.RoleTeacher && actor.Role != domain.RoleOwner {
 		return domain.FileObject{}, domain.ErrForbidden
 	}
+	policy, category, err := normalizeUploadPolicy(input.Policy, input.Category, input.Purpose)
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	input.Policy = policy
+	input.Category = category
 	if input.Category == domain.FileCategorySpecial && actor.Role == domain.RoleTeacher {
 		return domain.FileObject{}, domain.ErrForbidden
 	}
@@ -180,10 +201,12 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 		return domain.FileObject{}, domain.ErrInvalidInput
 	}
 
-	hash := sha256.New()
-	key := storageKey(input.BranchID, input.Category, input.OriginalFilename)
-	content := io.TeeReader(input.Content, hash)
-	if err := s.storage.Put(ctx, bucket, key, content, input.Size, input.MimeType); err != nil {
+	upload, err := prepareUploadContent(input)
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	key := storageKey(input.BranchID, input.Category, upload.filename)
+	if err := s.storage.Put(ctx, bucket, key, bytes.NewReader(upload.content), upload.storedSize, upload.mimeType); err != nil {
 		return domain.FileObject{}, err
 	}
 
@@ -193,12 +216,13 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 		OwnerType:         strings.TrimSpace(input.OwnerType),
 		OwnerID:           strings.TrimSpace(input.OwnerID),
 		Category:          input.Category,
+		Policy:            input.Policy,
 		Purpose:           input.Purpose,
-		OriginalFilename:  strings.TrimSpace(input.OriginalFilename),
-		MimeType:          strings.TrimSpace(input.MimeType),
+		OriginalFilename:  upload.filename,
+		MimeType:          upload.mimeType,
 		OriginalSizeBytes: input.Size,
-		StoredSizeBytes:   input.Size,
-		OriginalSHA256:    hex.EncodeToString(hash.Sum(nil)),
+		StoredSizeBytes:   upload.storedSize,
+		OriginalSHA256:    upload.originalSHA256,
 		StorageBucket:     bucket,
 		StorageKey:        key,
 	})
@@ -208,6 +232,133 @@ func (s *Service) UploadFile(ctx context.Context, actor domain.Principal, input 
 	s.publishFileEvents(ctx, file)
 
 	return file, nil
+}
+
+type preparedUpload struct {
+	content        []byte
+	filename       string
+	mimeType       string
+	storedSize     int64
+	originalSHA256 string
+}
+
+func prepareUploadContent(input UploadFileInput) (preparedUpload, error) {
+	original, err := io.ReadAll(io.LimitReader(input.Content, maxUploadContentBytes+1))
+	if err != nil {
+		return preparedUpload{}, err
+	}
+	if int64(len(original)) > maxUploadContentBytes {
+		return preparedUpload{}, domain.ErrInvalidInput
+	}
+
+	hash := sha256.Sum256(original)
+	upload := preparedUpload{
+		content:        original,
+		filename:       strings.TrimSpace(input.OriginalFilename),
+		mimeType:       normalizedUploadMIME(input.MimeType, original, input.OriginalFilename),
+		storedSize:     int64(len(original)),
+		originalSHA256: hex.EncodeToString(hash[:]),
+	}
+
+	if !isProfileImageUpload(input) {
+		return upload, nil
+	}
+	if !isAllowedProfileImageType(upload.mimeType) {
+		return preparedUpload{}, domain.ErrInvalidInput
+	}
+
+	optimized, err := optimizeProfileImage(original, upload.filename)
+	if err != nil {
+		return preparedUpload{}, domain.ErrInvalidInput
+	}
+	upload.content = optimized.content
+	upload.filename = optimized.filename
+	upload.mimeType = optimized.mimeType
+	upload.storedSize = int64(len(optimized.content))
+
+	return upload, nil
+}
+
+func isProfileImageUpload(input UploadFileInput) bool {
+	return input.Policy == domain.FilePolicyStandardUI ||
+		input.Category == domain.FileCategoryStandard &&
+			input.Purpose == domain.FilePurposeProfile
+}
+
+func normalizeUploadPolicy(policy domain.FilePolicy, category domain.FileCategory, purpose domain.FilePurpose) (domain.FilePolicy, domain.FileCategory, error) {
+	if policy == "" {
+		if !category.IsValid() {
+			return "", "", domain.ErrInvalidInput
+		}
+		return domain.InferFilePolicy(category, purpose), category, nil
+	}
+	if !policy.IsValid() {
+		return "", "", domain.ErrInvalidInput
+	}
+
+	expectedCategory := policy.Category()
+	if category != "" && category != expectedCategory {
+		return "", "", domain.ErrInvalidInput
+	}
+
+	return policy, expectedCategory, nil
+}
+
+func isAllowedProfileImageType(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg", "image/png", "image/webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedUploadMIME(mimeType string, content []byte, filename string) string {
+	raw := strings.TrimSpace(strings.Split(mimeType, ";")[0])
+	switch strings.ToLower(raw) {
+	case "image/jpeg", "image/jpg", "image/pjpeg":
+		return "image/jpeg"
+	case "image/png", "image/x-png":
+		return "image/png"
+	case "image/webp":
+		return "image/webp"
+	case "", "application/octet-stream":
+		// Some browsers/OS integrations omit image MIME. Fall through to sniffing.
+	default:
+		return raw
+	}
+
+	detected := strings.ToLower(strings.TrimSpace(http.DetectContentType(content)))
+	switch detected {
+	case "image/jpeg", "image/png", "image/webp":
+		return detected
+	}
+	if isWebP(content) {
+		return "image/webp"
+	}
+
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	default:
+		return detected
+	}
+}
+
+func isWebP(content []byte) bool {
+	return len(content) >= 12 &&
+		content[0] == 'R' &&
+		content[1] == 'I' &&
+		content[2] == 'F' &&
+		content[3] == 'F' &&
+		content[8] == 'W' &&
+		content[9] == 'E' &&
+		content[10] == 'B' &&
+		content[11] == 'P'
 }
 
 func (s *Service) ListFiles(ctx context.Context, actor domain.Principal, branchID string) ([]domain.FileObject, error) {
@@ -222,6 +373,21 @@ func (s *Service) ListFiles(ctx context.Context, actor domain.Principal, branchI
 	}
 
 	return s.store.ListFiles(ctx, branchID)
+}
+
+func (s *Service) ListFilesPage(ctx context.Context, actor domain.Principal, branchID string, ownerType string, ownerID string, purpose domain.FilePurpose, page domain.PageRequest) ([]domain.FileObject, int, error) {
+	if !actor.IsOwner() {
+		branchID = actor.BranchID
+	}
+	branchID = strings.TrimSpace(branchID)
+	if actor.IsOwner() && branchID == "" {
+		return s.store.ListFilesPage(ctx, "", strings.TrimSpace(ownerType), strings.TrimSpace(ownerID), purpose, page)
+	}
+	if err := auth.RequireBranch(actor, branchID); err != nil {
+		return nil, 0, err
+	}
+
+	return s.store.ListFilesPage(ctx, branchID, strings.TrimSpace(ownerType), strings.TrimSpace(ownerID), purpose, page)
 }
 
 func (s *Service) GetFile(ctx context.Context, actor domain.Principal, fileID string) (domain.FileObject, error) {
@@ -268,6 +434,36 @@ func (s *Service) CreateDownloadURL(ctx context.Context, actor domain.Principal,
 	}, nil
 }
 
+func (s *Service) DeleteFile(ctx context.Context, actor domain.Principal, fileID string) (domain.FileObject, error) {
+	if s.storage == nil {
+		return domain.FileObject{}, domain.ErrInvalidInput
+	}
+
+	file, err := s.store.GetFile(ctx, strings.TrimSpace(fileID))
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	if file.DeletedAt != nil {
+		return domain.FileObject{}, domain.ErrNotFound
+	}
+	if err := auth.RequireBranch(actor, file.BranchID); err != nil {
+		return domain.FileObject{}, err
+	}
+	if err := s.storage.Delete(ctx, file.StorageBucket, file.StorageKey); err != nil {
+		return domain.FileObject{}, err
+	}
+
+	deleted, err := s.store.MarkFileDeleted(ctx, file.ID, time.Now().UTC())
+	if err != nil {
+		return domain.FileObject{}, err
+	}
+	if s.events != nil {
+		_ = s.events.Publish(ctx, "files.file.deleted", deleted)
+	}
+
+	return deleted, nil
+}
+
 func (s *Service) CleanupExpiredFiles(ctx context.Context, actor domain.Principal, limit int) (RetentionCleanupResult, error) {
 	if s.storage == nil {
 		return RetentionCleanupResult{}, domain.ErrInvalidInput
@@ -310,7 +506,8 @@ func (s *Service) CleanupExpiredFilesSystem(ctx context.Context, limit int) (Ret
 	return RetentionCleanupResult{DeletedCount: len(deleted), Files: deleted}, nil
 }
 
-func (s *Service) StartRetentionWorker(ctx context.Context, options RetentionWorkerOptions) {
+func (s *Service) StartRetentionWorker(ctx context.Context, options RetentionWorkerOptions) <-chan struct{} {
+	done := make(chan struct{})
 	interval := options.Interval
 	if interval <= 0 {
 		interval = time.Hour
@@ -325,6 +522,7 @@ func (s *Service) StartRetentionWorker(ctx context.Context, options RetentionWor
 	}
 
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -345,6 +543,8 @@ func (s *Service) StartRetentionWorker(ctx context.Context, options RetentionWor
 			}
 		}
 	}()
+
+	return done
 }
 
 func (s *Service) bucketFor(category domain.FileCategory) string {
@@ -378,6 +578,7 @@ func safeFilename(filename string) string {
 	}
 
 	var b strings.Builder
+	b.Grow(len(name))
 	for _, r := range name {
 		switch {
 		case r >= 'a' && r <= 'z':

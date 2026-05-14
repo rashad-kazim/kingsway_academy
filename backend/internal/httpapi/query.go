@@ -41,26 +41,16 @@ func writePageHeaders(w http.ResponseWriter, page pageParams, total int) {
 	w.Header().Set("X-Offset", strconv.Itoa(page.Offset))
 }
 
-func writePagedJSON[T any](w http.ResponseWriter, r *http.Request, items []T) bool {
-	page, err := parsePage(r)
-	if err != nil {
-		writeError(w, err)
-		return false
-	}
+func (p pageParams) domainPage() domain.PageRequest {
+	return domain.PageRequest{Limit: p.Limit, Offset: p.Offset}
+}
 
-	total := len(items)
-	start := page.Offset
-	if start > total {
-		start = total
+func writePageJSON[T any](w http.ResponseWriter, page pageParams, total int, items []T) {
+	if items == nil {
+		items = []T{}
 	}
-	end := start + page.Limit
-	if end > total {
-		end = total
-	}
-
 	writePageHeaders(w, page, total)
-	writeJSON(w, http.StatusOK, items[start:end])
-	return true
+	writeJSON(w, http.StatusOK, items)
 }
 
 func parseBoolQuery(value string) (bool, bool) {

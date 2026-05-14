@@ -57,7 +57,8 @@ func NewDispatcher(pool *pgxpool.Pool, publisher RawPublisher) *Dispatcher {
 	return &Dispatcher{pool: pool, publisher: publisher}
 }
 
-func (d *Dispatcher) Start(ctx context.Context, options DispatcherOptions) {
+func (d *Dispatcher) Start(ctx context.Context, options DispatcherOptions) <-chan struct{} {
+	done := make(chan struct{})
 	interval := options.Interval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -76,6 +77,7 @@ func (d *Dispatcher) Start(ctx context.Context, options DispatcherOptions) {
 	}
 
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -101,6 +103,8 @@ func (d *Dispatcher) Start(ctx context.Context, options DispatcherOptions) {
 			}
 		}
 	}()
+
+	return done
 }
 
 func (d *Dispatcher) DispatchOnce(ctx context.Context, limit int, maxAttempts int) (int, error) {

@@ -35,6 +35,7 @@ type applicationStore interface {
 	admin.Store
 	finance.Store
 	files.Store
+	httpapi.IdempotencyStore
 	notification.Store
 }
 
@@ -42,6 +43,7 @@ type runtimeDependencies struct {
 	appStore         applicationStore
 	financeOptions   []finance.Option
 	fileOptions      []files.Option
+	rateLimitBackend httpapi.DistributedRateLimiter
 	eventConsumer    *queue.TopicConsumer
 	outboxDispatcher *outbox.Dispatcher
 }
@@ -49,6 +51,9 @@ type runtimeDependencies struct {
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
+		panic(err)
+	}
+	if err := auth.ValidateJWTSecret(cfg.AppEnv, cfg.JWTSecret); err != nil {
 		panic(err)
 	}
 
@@ -72,12 +77,13 @@ func main() {
 	adminService := admin.NewService(deps.appStore)
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
+	workerDone := make([]<-chan struct{}, 0, 5)
 	if cfg.RetentionWorkerEnabled && !strings.EqualFold(cfg.DataStore, "memory") {
-		fileService.StartRetentionWorker(workerCtx, files.RetentionWorkerOptions{
+		workerDone = append(workerDone, fileService.StartRetentionWorker(workerCtx, files.RetentionWorkerOptions{
 			Interval: time.Duration(cfg.RetentionWorkerInterval) * time.Second,
 			Limit:    cfg.RetentionWorkerLimit,
 			Logger:   log,
-		})
+		}))
 		log.Info(
 			"retention worker started",
 			zap.Int("interval_seconds", cfg.RetentionWorkerInterval),
@@ -85,31 +91,33 @@ func main() {
 		)
 	}
 	if cfg.OutboxDispatcherEnabled && deps.outboxDispatcher != nil {
-		deps.outboxDispatcher.Start(workerCtx, outbox.DispatcherOptions{
+		workerDone = append(workerDone, deps.outboxDispatcher.Start(workerCtx, outbox.DispatcherOptions{
 			Interval:    time.Duration(cfg.OutboxDispatcherInterval) * time.Second,
 			BatchSize:   cfg.OutboxDispatcherBatch,
 			MaxAttempts: cfg.OutboxMaxAttempts,
 			Logger:      log,
-		})
+		}))
 		log.Info("outbox dispatcher started", zap.Int("interval_seconds", cfg.OutboxDispatcherInterval))
 	}
 	if cfg.NotificationWorkersEnabled && !strings.EqualFold(cfg.DataStore, "memory") {
-		notificationService.StartPaymentReminderWorker(workerCtx, notification.WorkerOptions{
+		workerDone = append(workerDone, notificationService.StartPaymentReminderWorker(workerCtx, notification.WorkerOptions{
 			Interval: time.Duration(cfg.PaymentReminderIntervalSeconds) * time.Second,
 			Horizon:  time.Duration(cfg.PaymentReminderHorizonDays) * 24 * time.Hour,
 			Logger:   log,
-		})
-		notificationService.StartFileRetentionNoticeWorker(workerCtx, notification.WorkerOptions{
+		}))
+		workerDone = append(workerDone, notificationService.StartFileRetentionNoticeWorker(workerCtx, notification.WorkerOptions{
 			Interval: time.Duration(cfg.FileRetentionNoticeIntervalSecs) * time.Second,
 			Horizon:  time.Duration(cfg.FileRetentionNoticeHorizonDays) * 24 * time.Hour,
 			Logger:   log,
-		})
+		}))
 		log.Info("notification workers started")
 	}
 	if deps.eventConsumer != nil {
-		if err := deps.eventConsumer.Start(workerCtx, notificationService.HandleEvent, log); err != nil {
+		done, err := deps.eventConsumer.Start(workerCtx, notificationService.HandleEvent, log)
+		if err != nil {
 			log.Fatal("rabbitmq notification consumer failed", zap.Error(err))
 		}
+		workerDone = append(workerDone, done)
 		log.Info("rabbitmq notification consumer started")
 	}
 
@@ -120,10 +128,14 @@ func main() {
 		fileService,
 		notificationService,
 		adminService,
+		deps.appStore,
 		log,
 		httpapi.Options{
 			RateLimitEnabled:   cfg.RateLimitEnabled,
 			RateLimitPerMinute: cfg.RateLimitPerMinute,
+			RateLimitBackend:   deps.rateLimitBackend,
+			CORSAllowedOrigins: splitCSV(cfg.CORSAllowedOrigins),
+			TrustedProxyCIDRs:  splitCSV(cfg.TrustedProxyCIDRs),
 		},
 	)
 	server := &http.Server{
@@ -143,12 +155,49 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	stopWorkers()
+	waitForWorkers(workerDone, time.Duration(cfg.WorkerShutdownTimeoutSeconds)*time.Second, log)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		log.Error("api server shutdown failed", zap.Error(err))
 	}
+}
+
+func waitForWorkers(done []<-chan struct{}, timeout time.Duration, log *zap.Logger) {
+	if len(done) == 0 {
+		return
+	}
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	for _, ch := range done {
+		if ch == nil {
+			continue
+		}
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			log.Warn("worker shutdown timed out", zap.Duration("timeout", timeout))
+			return
+		}
+	}
+	log.Info("workers stopped")
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func buildDependencies(ctx context.Context, cfg config.Config, log *zap.Logger) (runtimeDependencies, func()) {
@@ -229,6 +278,7 @@ func buildDependencies(ctx context.Context, cfg config.Config, log *zap.Logger) 
 		appStore:         store.NewPostgres(pool),
 		financeOptions:   financeOptions,
 		fileOptions:      fileOptions,
+		rateLimitBackend: cache.NewRedisRateLimiter(redisClient, "kingsway:rate:"),
 		eventConsumer:    eventConsumer,
 		outboxDispatcher: outboxDispatcher,
 	}, cleanup
